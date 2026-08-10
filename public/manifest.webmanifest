@@ -1,0 +1,20 @@
+{
+  "name": "Sistema Academia",
+  "short_name": "Academia",
+  "description": "Gestão para academias de bairro e estúdios de personal trainer",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#18181b",
+  "theme_color": "#16a34a",
+  "lang": "pt-BR",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
