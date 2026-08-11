@@ -16,12 +16,16 @@ create table if not exists public.alunos (
   id                uuid primary key default gen_random_uuid(),
   nome              text not null,
   telefone          text,
+  cpf               text,
   plano_valor       numeric(10,2) not null default 0,
   status_pagamento  text not null default 'em_dia',
   data_vencimento   date,
   created_at        timestamptz not null default now(),
   constraint alunos_status_check check (status_pagamento in ('em_dia', 'vencendo', 'inadimplente'))
 );
+
+-- Para bancos já existentes: adiciona a coluna cpf sem quebrar os dados
+alter table public.alunos add column if not exists cpf text;
 
 create index if not exists alunos_status_idx on public.alunos (status_pagamento);
 create index if not exists alunos_vencimento_idx on public.alunos (data_vencimento);

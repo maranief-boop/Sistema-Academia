@@ -8,6 +8,7 @@ import { paraInputDate } from '../utils/format'
 const ALUNO_VAZIO = {
   nome: '',
   telefone: '',
+  cpf: '',
   plano_valor: '',
   data_vencimento: '',
   status_pagamento: 'em_dia'
@@ -43,6 +44,7 @@ export default function FormAluno({ inicial = null, salvando, onSalvar, onCancel
     onSalvar({
       nome: form.nome.trim(),
       telefone: form.telefone.trim(),
+      cpf: form.cpf.trim(),
       plano_valor: Number(form.plano_valor || 0),
       data_vencimento: form.data_vencimento || null,
       status_pagamento: form.status_pagamento
@@ -77,6 +79,18 @@ export default function FormAluno({ inicial = null, salvando, onSalvar, onCancel
             inputMode="tel"
           />
         </div>
+        <div>
+          <Label>CPF (acesso do aluno)</Label>
+          <Input
+            value={form.cpf}
+            onChange={(e) => set('cpf', e.target.value)}
+            placeholder="123.456.789-00"
+            inputMode="numeric"
+          />
+        </div>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <Label>Valor da mensalidade (R$)</Label>
           <Input

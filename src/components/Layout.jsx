@@ -14,7 +14,8 @@ import {
   Monitor,
   Sun,
   Moon,
-  Loader2
+  Loader2,
+  User
 } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 
@@ -117,6 +118,16 @@ export default function Layout() {
         </nav>
 
         <div className="space-y-1 border-t border-zinc-200 p-3 dark:border-zinc-800">
+          <a
+            href="#/aluno"
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-zinc-600 transition hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+            title="Abrir o Portal do Aluno em nova aba"
+          >
+            <User className="h-5 w-5" />
+            Portal do Aluno
+          </a>
           <button
             onClick={ciclarTema}
             className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-zinc-600 transition hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
@@ -153,6 +164,15 @@ export default function Layout() {
               </p>
             </div>
             <div className="flex items-center gap-1">
+              <a
+                href="#/aluno"
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-lg p-2 text-zinc-600 transition hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                title="Portal do Aluno"
+              >
+                <User className="h-5 w-5" />
+              </a>
               <button
                 onClick={ciclarTema}
                 className="rounded-lg p-2 text-zinc-600 transition hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"

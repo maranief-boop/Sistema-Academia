@@ -11,6 +11,7 @@ import Financeiro from './pages/Financeiro'
 import Treinos from './pages/Treinos'
 import Checkins from './pages/Checkins'
 import Configuracoes from './pages/Configuracoes'
+import PortalAluno from './pages/PortalAluno'
 
 export default function App() {
   return (
@@ -18,6 +19,9 @@ export default function App() {
       <ToastProvider>
         <HashRouter>
           <Routes>
+            {/* Rota pública — Portal do Aluno (independente do painel do gestor) */}
+            <Route path="/aluno" element={<PortalAluno />} />
+
             <Route element={<Layout />}>
               <Route path="/" element={<Dashboard />} />
               <Route path="/alunos" element={<Alunos />} />
