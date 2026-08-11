@@ -45,7 +45,7 @@ export default function CrmAgenda() {
 
   const porData = useMemo(() => {
     const mapa = {}
-    leads.forEach((l) => {
+    leads.filter(Boolean).forEach((l) => {
       if (!l.data_preferida) return
       const chave = l.data_preferida.slice(0, 10)
       if (!mapa[chave]) mapa[chave] = []
@@ -86,7 +86,8 @@ export default function CrmAgenda() {
   )
 
   const excluir = async (lead) => {
-    if (!window.confirm(`Excluir o agendamento de "${lead.nome}"?`)) return
+    if (!lead) return
+    if (!window.confirm(`Excluir o agendamento de "${lead?.nome}"?`)) return
     const r = await remover(lead.id)
     if (r.erro) toast(`Erro ao excluir: ${r.erro}`, 'erro')
     else toast('Agendamento excluído')
@@ -207,7 +208,7 @@ export default function CrmAgenda() {
             ) : (
               <div className="space-y-2">
                 {agendamentosDia.map((lead) => {
-                  const st = STAGES[lead.stage] || STAGES.novo
+                  const st = STAGES[lead?.stage] || STAGES.novo
                   const wa = linkWhatsApp(
                     lead.telefone,
                     `Olá, ${lead.nome}! Confirmando sua aula experimental ${lead.horario_preferido ? `às ${lead.horario_preferido} ` : ''}em ${diaFormatado}. 💪`
@@ -220,7 +221,7 @@ export default function CrmAgenda() {
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
                           <p className="truncate text-sm font-bold text-zinc-900 dark:text-zinc-100">
-                            {lead.nome || 'Sem nome'}
+                            {lead?.nome || 'Sem nome'}
                           </p>
                           <span
                             className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${st.chip}`}
@@ -229,8 +230,8 @@ export default function CrmAgenda() {
                           </span>
                         </div>
                         <p className="mt-0.5 truncate text-xs text-zinc-500">
-                          {lead.telefone || 'Sem telefone'}
-                          {lead.horario_preferido
+                          {lead?.telefone || 'Sem telefone'}
+                          {lead?.horario_preferido
                             ? ` · às ${lead.horario_preferido}`
                             : ''}
                         </p>

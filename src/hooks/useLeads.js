@@ -19,7 +19,7 @@ export function useLeads() {
     if (error) {
       setErro(error.message)
     } else {
-      setLeads(data || [])
+      setLeads((data || []).filter(Boolean))
       setErro(null)
     }
     setCarregando(false)
@@ -45,6 +45,7 @@ export function useLeads() {
         .select()
         .single()
       if (error) return { erro: error.message }
+      if (!data) return { erro: 'Nenhum dado retornado' }
       setLeads((prev) => [data, ...prev])
       return { dados: data }
     },
@@ -59,7 +60,7 @@ export function useLeads() {
       .select()
       .single()
     if (error) return { erro: error.message }
-    setLeads((prev) => prev.map((l) => (l.id === id ? data : l)))
+    if (data) setLeads((prev) => prev.map((l) => (l.id === id ? data : l)))
     return { dados: data }
   }, [])
 

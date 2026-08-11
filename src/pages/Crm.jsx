@@ -75,27 +75,28 @@ function CardMetrica({ rotulo, valor, cor, icone: Icone, sufixo }) {
 }
 
 function CardLead({ lead, arrastando, onDragStart, onEdit, onDelete, onMover }) {
-  const st = STAGES[lead.stage] || STAGES.novo
+  if (!lead) return null
+  const st = STAGES[lead?.stage] || STAGES.novo
   const wa = linkWhatsApp(
-    lead.telefone,
-    `Olá, ${lead.nome}! Aqui é da academia. Tudo bem? 😄`
+    lead?.telefone,
+    `Olá, ${lead?.nome}! Aqui é da academia. Tudo bem? 😄`
   )
 
   return (
     <div
       draggable
       onDragStart={(e) => {
-        e.dataTransfer.setData('text/plain', lead.id)
+        e.dataTransfer.setData('text/plain', lead?.id)
         e.dataTransfer.effectAllowed = 'move'
-        onDragStart(lead.id)
+        onDragStart(lead?.id)
       }}
       className={`group cursor-grab rounded-xl border border-zinc-200 bg-white p-3 shadow-sm transition hover:border-zinc-300 active:cursor-grabbing dark:border-zinc-700 dark:bg-zinc-800 ${
-        arrastando === lead.id ? 'opacity-50 ring-2 ring-primary-500' : ''
+        arrastando === lead?.id ? 'opacity-50 ring-2 ring-primary-500' : ''
       }`}
     >
       <div className="flex items-start justify-between gap-2">
         <p className="min-w-0 flex-1 truncate text-sm font-bold text-zinc-900 dark:text-zinc-100">
-          {lead.nome || 'Sem nome'}
+          {lead?.nome || 'Sem nome'}
         </p>
         <span
           className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${st.chip}`}
@@ -105,18 +106,18 @@ function CardLead({ lead, arrastando, onDragStart, onEdit, onDelete, onMover }) 
       </div>
 
       <p className="mt-1 truncate text-xs text-zinc-500 dark:text-zinc-400">
-        {lead.telefone || 'Sem telefone'}
-        {lead.data_preferida ? ` · ${lead.data_preferida.slice(0, 5)}` : ''}
+        {lead?.telefone || 'Sem telefone'}
+        {lead?.data_preferida ? ` · ${lead.data_preferida.slice(0, 5)}` : ''}
       </p>
 
       <div className="mt-2 flex items-center justify-between">
         <div className="flex items-center gap-1.5 text-[10px] text-zinc-400">
-          {lead.origem && (
+          {lead?.origem && (
             <span className="rounded bg-zinc-100 px-1.5 py-0.5 font-medium dark:bg-zinc-700/60">
               {lead.origem}
             </span>
           )}
-          <span>{formatarCaptura(lead.data_captura)}</span>
+          <span>{formatarCaptura(lead?.data_captura)}</span>
         </div>
         <div className="flex items-center gap-1 opacity-100 transition md:opacity-0 md:group-hover:opacity-100">
           {wa && (
@@ -148,10 +149,10 @@ function CardLead({ lead, arrastando, onDragStart, onEdit, onDelete, onMover }) 
       </div>
 
       <div className="mt-2 flex flex-wrap gap-1">
-        {STAGES_ORDER.filter((s) => s !== (lead.stage || 'novo')).map((s) => (
+        {STAGES_ORDER.filter((s) => s !== (lead?.stage || 'novo')).map((s) => (
           <button
             key={s}
-            onClick={() => onMover(lead.id, s)}
+            onClick={() => onMover(lead?.id, s)}
             className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold transition ${STAGES[s].chip} hover:brightness-110`}
             title={`Mover para ${STAGES[s].rotulo}`}
           >
@@ -174,13 +175,14 @@ export default function Crm() {
 
   const filtradas = useMemo(() => {
     const inicio = getPeriodStart(periodo)
-    if (!inicio) return leads
-    return leads.filter((l) => new Date(l.data_captura) >= inicio)
+    const validos = leads.filter(Boolean)
+    if (!inicio) return validos
+    return validos.filter((l) => new Date(l?.data_captura) >= inicio)
   }, [leads, periodo])
 
   const metricas = useMemo(() => {
     const porStage = STAGES_ORDER.reduce((acc, s) => {
-      acc[s] = filtradas.filter((l) => (l.stage || 'novo') === s).length
+      acc[s] = filtradas.filter((l) => l && (l.stage || 'novo') === s).length
       return acc
     }, {})
     return { total: filtradas.length, ...porStage }
@@ -203,7 +205,8 @@ export default function Crm() {
   const abrirNovo = () => setModal('novo')
 
   const excluirLead = async (lead) => {
-    if (!window.confirm(`Excluir o lead de "${lead.nome}"?`)) return
+    if (!lead) return
+    if (!window.confirm(`Excluir o lead de "${lead?.nome}"?`)) return
     const r = await remover(lead.id)
     if (r.erro) toast(`Erro ao excluir: ${r.erro}`, 'erro')
     else toast('Lead excluído')
@@ -225,7 +228,7 @@ export default function Crm() {
     const r =
       modal === 'novo'
         ? await criar(payload)
-        : await atualizar(modal.id, {
+        : await atualizar(modal?.id, {
             nome: payload.nome,
             telefone: payload.telefone,
             origem: payload.origem,
@@ -426,12 +429,12 @@ export default function Crm() {
                   </h3>
                 </div>
                 <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${STAGES[stage].chip}`}>
-                  {filtradas.filter((l) => (l.stage || 'novo') === stage).length}
+                  {filtradas.filter((l) => l && (l.stage || 'novo') === stage).length}
                 </span>
               </div>
               <div className="min-h-[180px] space-y-3">
                 {filtradas
-                  .filter((l) => (l.stage || 'novo') === stage)
+                  .filter((l) => l && (l.stage || 'novo') === stage)
                   .map((lead) => (
                     <CardLead
                       key={lead.id}
@@ -461,7 +464,7 @@ export default function Crm() {
             <Label>Nome</Label>
             <Input
               name="nome"
-              defaultValue={modal === 'novo' ? '' : modal.nome}
+              defaultValue={modal === 'novo' ? '' : modal?.nome}
               placeholder="Nome do interessado"
               required
             />
@@ -471,7 +474,7 @@ export default function Crm() {
               <Label>Telefone</Label>
               <Input
                 name="telefone"
-                defaultValue={modal === 'novo' ? '' : modal.telefone}
+                defaultValue={modal === 'novo' ? '' : modal?.telefone}
                 placeholder="(00) 00000-0000"
               />
             </div>
@@ -479,14 +482,14 @@ export default function Crm() {
               <Label>Origem</Label>
               <Input
                 name="origem"
-                defaultValue={modal === 'novo' ? '' : modal.origem}
+                defaultValue={modal === 'novo' ? '' : modal?.origem}
                 placeholder="Site, WhatsApp, Indicação..."
               />
             </div>
           </div>
           <div>
             <Label>Estágio</Label>
-            <Select name="stage" defaultValue={modal === 'novo' ? 'novo' : modal.stage}>
+            <Select name="stage" defaultValue={modal === 'novo' ? 'novo' : modal?.stage}>
               {STAGES_ORDER.map((s) => (
                 <option key={s} value={s}>
                   {STAGES[s].rotulo}
@@ -498,7 +501,7 @@ export default function Crm() {
             <Label>Notas</Label>
             <Input
               name="notas"
-              defaultValue={modal === 'novo' ? '' : modal.notas}
+              defaultValue={modal === 'novo' ? '' : modal?.notas}
               placeholder="Observações do atendimento..."
             />
           </div>

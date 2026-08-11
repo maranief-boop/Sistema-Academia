@@ -118,6 +118,7 @@ export function construirSerie(leads, periodo) {
   return buckets.map((b) => ({
     rotulo: b.rotulo,
     total: leads.filter((l) => {
+      if (!l || !l.data_captura) return false
       const t = new Date(l.data_captura)
       return t >= b.inicio && t < b.fim
     }).length
@@ -150,16 +151,16 @@ export function baixarCSV(leads) {
     'Notas',
     'Capturado em'
   ]
-  const linhas = leads.map((l) =>
+  const linhas = leads.filter(Boolean).map((l) =>
     [
-      l.nome || '',
-      l.telefone || '',
-      l.origem || '',
-      STAGE_LABELS[l.stage] || l.stage || '',
-      l.data_preferida || '',
-      l.horario_preferido || '',
-      l.notas || '',
-      l.data_captura || ''
+      l?.nome || '',
+      l?.telefone || '',
+      l?.origem || '',
+      STAGE_LABELS[l?.stage] || l?.stage || '',
+      l?.data_preferida || '',
+      l?.horario_preferido || '',
+      l?.notas || '',
+      l?.data_captura || ''
     ]
       .map((v) => `"${String(v).replace(/"/g, '""')}"`)
       .join(';')
