@@ -172,3 +172,20 @@ alter table public.leads add column if not exists data_captura timestamptz not n
 create index if not exists leads_stage_idx on public.leads (stage);
 create index if not exists leads_captura_idx on public.leads (data_captura desc);
 create index if not exists leads_data_preferida_idx on public.leads (data_preferida);
+
+-- ---------------------------------------------------------------------
+-- Tabela: macrociclo (planejamento de 12 semanas por aluno)
+-- semanas_json: [ { semana: 1, foco, volume, intensidade, obs }, ... ]
+-- ---------------------------------------------------------------------
+create table if not exists public.macrociclo (
+  aluno_id     uuid primary key references public.alunos(id) on delete cascade,
+  semanas_json jsonb not null default '[]'::jsonb,
+  created_at   timestamptz not null default now(),
+  updated_at   timestamptz not null default now()
+);
+
+-- IMPORTANTE: recarrega o cache de schema do PostgREST para que as colunas
+-- e tabelas novas (treinos.dias_semana, treinos.restricoes, exercicios_base,
+-- leads, macrociclo) fiquem disponíveis IMEDIATAMENTE via API.
+-- (Sem isso, as chamadas REST podem responder 400 "column does not exist".)
+notify pgrst, 'reload schema';

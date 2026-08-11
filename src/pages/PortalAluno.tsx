@@ -10,7 +10,9 @@ import {
   AlertCircle,
   CalendarCheck,
   CheckCircle2,
+  ChevronDown,
   Dumbbell,
+  ListTree,
   Loader2,
   LogOut,
   Phone,
@@ -96,6 +98,10 @@ export default function PortalAluno() {
   // ---------- Ficha de treino ----------
   const [treinos, setTreinos] = useState<Treino[]>([])
   const [carregandoTreinos, setCarregandoTreinos] = useState(false)
+
+  // ---------- Macrociclo (12 semanas) ----------
+  const [macrociclo, setMacrociclo] = useState<any[]>([])
+  const [verMacrociclo, setVerMacrociclo] = useState(false)
 
   const aluno = sessao?.aluno ?? null
 
@@ -203,10 +209,25 @@ export default function PortalAluno() {
     }
   }, [aluno])
 
+  const carregarMacrociclo = useCallback(async () => {
+    if (!aluno) return
+    try {
+      const { data, error } = await supabase
+        .from('macrociclo')
+        .select('semanas_json')
+        .eq('aluno_id', aluno.id)
+        .maybeSingle()
+      if (!error && data?.semanas_json) setMacrociclo(data.semanas_json)
+    } catch {
+      // macrociclo indisponível: não exibe a seção
+    }
+  }, [aluno])
+
   useEffect(() => {
     if (aluno) {
       verificarCheckinHoje()
       carregarFicha()
+      carregarMacrociclo()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aluno?.id])
@@ -241,6 +262,17 @@ export default function PortalAluno() {
     day: 'numeric',
     month: 'long'
   })
+
+  // Nome do dia de hoje ("Segunda", "Terça", ...) para achar o treino do dia
+  const hojeDiaNome = (() => {
+    const n = new Date().toLocaleDateString('pt-BR', { weekday: 'long' })
+    return n.charAt(0).toUpperCase() + n.slice(1).replace('-feira', '')
+  })()
+
+  // Treino cujo card tem o dia de hoje marcado nas caixinhas do treinador
+  const treinoHoje = treinos.find((t) =>
+    (t.dias_semana || '').includes(hojeDiaNome)
+  )
 
   // ===================================================================
   // TELA DE LOGIN
@@ -428,20 +460,61 @@ export default function PortalAluno() {
             </div>
           ) : (
             <div className="space-y-3">
-              {/* -------- Dias da semana selecionados -------- */}
-              {treinos[0]?.dias_semana && (
-                <div className="flex items-start gap-2.5 rounded-xl bg-primary-50 px-3.5 py-2.5 dark:bg-primary-950/60">
-                  <CalendarDays className="mt-0.5 h-4 w-4 shrink-0 text-primary-600 dark:text-primary-400" />
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-primary-700 dark:text-primary-300">
-                      Dias de treino
-                    </p>
-                    <p className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
-                      {treinos[0].dias_semana}
+              {/* -------- Treino de HOJE (destacado) -------- */}
+              <div className="overflow-hidden rounded-xl bg-gradient-to-br from-primary-600 to-primary-700 text-white">
+                <div className="px-4 pt-3">
+                  <div className="flex items-center gap-2">
+                    <CalendarDays className="h-4 w-4" />
+                    <p className="text-[11px] font-bold uppercase tracking-wider opacity-90">
+                      Treino de hoje · {hojeDiaNome}
                     </p>
                   </div>
+                  {treinoHoje ? (
+                    <p className="mt-1 text-2xl font-extrabold">
+                      Treino {treinoHoje.dia_semana}
+                      {(treinoHoje.exercicios_json || []).length > 0 && (
+                        <span className="ml-2 align-middle text-xs font-semibold opacity-80">
+                          {(treinoHoje.exercicios_json || []).length} exercício(s)
+                        </span>
+                      )}
+                    </p>
+                  ) : (
+                    <p className="mt-1 text-2xl font-extrabold">Dia de descanso</p>
+                  )}
                 </div>
-              )}
+                {treinoHoje && (treinoHoje.exercicios_json || []).length > 0 ? (
+                  <ul className="space-y-2 p-4">
+                    {(treinoHoje.exercicios_json || []).map((ex, i) => (
+                      <li key={i} className="rounded-xl bg-white/10 px-3 py-2.5">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-bold">{ex.nome}</p>
+                            <p className="text-xs opacity-85">
+                              {ex.series} séries · {ex.repeticoes} reps
+                              {ex.carga ? ` · ${ex.carga}` : ''}
+                            </p>
+                          </div>
+                          {ex.url_video && (
+                            <a
+                              href={ex.url_video}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-white px-2.5 py-1.5 text-[11px] font-bold text-primary-700 transition hover:bg-zinc-100"
+                            >
+                              <PlayCircle className="h-3.5 w-3.5" />
+                              Ver Vídeo
+                            </a>
+                          )}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                ) : treinoHoje ? (
+                  <p className="px-4 pb-4 text-xs opacity-80">
+                    Nenhum exercício cadastrado para este treino ainda.
+                  </p>
+                ) : null}
+              </div>
 
               {/* -------- Restrições / cuidados em destaque -------- */}
               {treinos[0]?.restricoes && (
@@ -458,18 +531,37 @@ export default function PortalAluno() {
                 </div>
               )}
 
+              {/* -------- Ficha da semana toda -------- */}
+              <p className="pt-1 text-[11px] font-bold uppercase tracking-wider text-zinc-400">
+                Ficha da semana toda
+              </p>
+
               {treinos.map((treino) => (
                 <div
                   key={treino.id}
                   className="overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800"
                 >
                   <div className="flex items-center justify-between bg-zinc-50 px-4 py-2.5 dark:bg-zinc-800/60">
-                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-600 text-sm font-extrabold text-white">
-                      {treino.dia_semana}
-                    </span>
-                    <span className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
-                      Treino {treino.dia_semana}
-                    </span>
+                    <div className="flex items-center gap-2.5">
+                      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-600 text-sm font-extrabold text-white">
+                        {treino.dia_semana}
+                      </span>
+                      <div>
+                        <p className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
+                          Treino {treino.dia_semana}
+                        </p>
+                        {treino.dias_semana && (
+                          <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                            {treino.dias_semana}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    {treinoHoje?.id === treino.id && (
+                      <span className="rounded-full bg-primary-600 px-2 py-0.5 text-[10px] font-bold text-white">
+                        Hoje
+                      </span>
+                    )}
                   </div>
                   <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
                     {(treino.exercicios_json || []).map((ex, i) => (
@@ -500,9 +592,53 @@ export default function PortalAluno() {
                         )}
                       </li>
                     ))}
+                    {(treino.exercicios_json || []).length === 0 && (
+                      <li className="px-4 py-3 text-center text-xs text-zinc-400">
+                        Nenhum exercício cadastrado.
+                      </li>
+                    )}
                   </ul>
                 </div>
               ))}
+
+              {/* -------- Macrociclo (12 semanas) -------- */}
+              {macrociclo.length > 0 && (
+                <div className="overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800">
+                  <button
+                    onClick={() => setVerMacrociclo((v) => !v)}
+                    className="flex w-full items-center justify-between bg-zinc-50 px-4 py-3 text-left dark:bg-zinc-800/60"
+                  >
+                    <span className="flex items-center gap-2">
+                      <ListTree className="h-4 w-4 text-primary-600" />
+                      <span className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
+                        Macrociclo (12 semanas)
+                      </span>
+                    </span>
+                    <ChevronDown
+                      className={`h-4 w-4 text-zinc-400 transition ${
+                        verMacrociclo ? 'rotate-180' : ''
+                      }`}
+                    />
+                  </button>
+                  {verMacrociclo && (
+                    <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                      {macrociclo.map((s) => (
+                        <div key={s.semana} className="px-4 py-3">
+                          <p className="text-xs font-extrabold uppercase tracking-wide text-primary-600 dark:text-primary-400">
+                            Semana {s.semana}
+                          </p>
+                          <div className="mt-1 space-y-0.5 text-sm text-zinc-700 dark:text-zinc-200">
+                            {s.foco && <p><span className="text-zinc-500">Foco:</span> {s.foco}</p>}
+                            {s.volume && <p><span className="text-zinc-500">Volume:</span> {s.volume}</p>}
+                            {s.intensidade && <p><span className="text-zinc-500">Intensidade:</span> {s.intensidade}</p>}
+                            {s.obs && <p><span className="text-zinc-500">Obs.:</span> {s.obs}</p>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </section>

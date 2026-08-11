@@ -1,7 +1,11 @@
 // =====================================================================
 // Módulo de Treinos — ficha por aluno dividida por dias (A, B, C, D)
-// Exercícios: nome (com busca inteligente), séries, repetições, carga e
-// link de vídeo explicativo. Campos de ficha: dias da semana e restrições.
+// • Exercícios: nome (com busca inteligente), séries, repetições, carga
+//   e link de vídeo explicativo.
+// • Cada card (Treino A/B/C/D) tem caixinhas dos dias da semana para o
+//   treinador marcar em quais dias aquele treino será feito. O Portal do
+//   Aluno mostra então o "Treino de Hoje".
+// • Restrições são globais (do aluno). Macrociclo de 12 semanas opcional.
 // =====================================================================
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
@@ -14,25 +18,28 @@ import {
   PlayCircle,
   CalendarDays,
   HeartPulse,
-  Save
+  Save,
+  ListTree,
+  Info
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAlunos } from '../hooks/useAlunos'
 import { useTreinos } from '../hooks/useTreinos'
+import { useMacrociclo } from '../hooks/useMacrociclo'
 import { useToast } from '../components/Toast'
 import { Modal } from '../components/Modal'
 import { Button, Input, Label, Select, Card, EstadoVazio, Spinner } from '../components/ui'
 
 const DIAS_FICHA = ['A', 'B', 'C', 'D']
 
-const OPCOES_DIAS_SEMANA = [
-  'Segunda',
-  'Terça',
-  'Quarta',
-  'Quinta',
-  'Sexta',
-  'Sábado',
-  'Domingo'
+const DIAS_SEMANA = [
+  { nome: 'Segunda', abreviado: 'Seg' },
+  { nome: 'Terça', abreviado: 'Ter' },
+  { nome: 'Quarta', abreviado: 'Qua' },
+  { nome: 'Quinta', abreviado: 'Qui' },
+  { nome: 'Sexta', abreviado: 'Sex' },
+  { nome: 'Sábado', abreviado: 'Sáb' },
+  { nome: 'Domingo', abreviado: 'Dom' }
 ]
 
 const EXERCICIO_VAZIO = {
@@ -47,6 +54,8 @@ export default function Treinos() {
   const { alunos, carregando: carregandoAlunos } = useAlunos()
   const { treinos, carregarTreinos, salvarDia, salvarFicha, removerDia } =
     useTreinos()
+  const { dados: macroDados, carregar: carregarMacro, salvar: salvarMacro, SEMANAS_VAZIAS } =
+    useMacrociclo()
   const { toast } = useToast()
 
   const [parametros, setParametros] = useSearchParams()
@@ -55,30 +64,59 @@ export default function Treinos() {
   // Modal de exercício
   const [modal, setModal] = useState(null) // { dia, indice?, exercicio? }
 
-  // Campos da ficha (dias da semana + restrições)
-  const [ficha, setFicha] = useState({ dias: [], restricoes: '' })
-  const [fichaInicializada, setFichaInicializada] = useState('')
+  // Restrições (globais do aluno)
+  const [restricoes, setRestricoes] = useState('')
   const [salvandoFicha, setSalvandoFicha] = useState(false)
+
+  // Dias da semana por card de treino (ex.: { A: ['Segunda','Quinta'], ... })
+  const [diasPorTreino, setDiasPorTreino] = useState(
+    Object.fromEntries(DIAS_FICHA.map((d) => [d, []]))
+  )
+  const [fichaInicializada, setFichaInicializada] = useState('')
+
+  // Macrociclo (12 semanas)
+  const [modalMacro, setModalMacro] = useState(false)
+  const [semanas, setSemanas] = useState(SEMANAS_VAZIAS)
+  const [salvandoMacro, setSalvandoMacro] = useState(false)
+  const [macrolInicializado, setMacrolInicializado] = useState('')
 
   useEffect(() => {
     if (alunoId) carregarTreinos(alunoId)
     else carregarTreinos(null)
   }, [alunoId, carregarTreinos])
 
-  // Inicializa o formulário de ficha a partir do banco (só quando troca de aluno)
+  // Inicializa restrições + dias por card a partir do banco (por aluno)
   useEffect(() => {
     if (alunoId && fichaInicializada !== alunoId) {
-      const ref = treinos[0]
-      setFicha({
-        dias: (ref?.dias_semana || '')
+      const mapa = {}
+      DIAS_FICHA.forEach((d) => {
+        const t = treinos.find((tt) => tt.dia_semana === d)
+        mapa[d] = (t?.dias_semana || '')
           .split(',')
           .map((s) => s.trim())
-          .filter(Boolean),
-        restricoes: ref?.restricoes || ''
+          .filter(Boolean)
       })
+      setDiasPorTreino(mapa)
+      setRestricoes(treinos[0]?.restricoes || '')
       setFichaInicializada(alunoId)
     }
   }, [alunoId, treinos, fichaInicializada])
+
+  // Carrega o macrociclo do aluno
+  useEffect(() => {
+    if (alunoId && macrolInicializado !== alunoId) {
+      carregarMacro(alunoId).then((d) => {
+        if (d?.semanas_json?.length) {
+          setSemanas(
+            SEMANAS_VAZIAS.map((base, i) => ({ ...base, ...(d.semanas_json[i] || {}) }))
+          )
+        } else {
+          setSemanas(SEMANAS_VAZIAS)
+        }
+      })
+      setMacrolInicializado(alunoId)
+    }
+  }, [alunoId, carregarMacro, SEMANAS_VAZIAS, macrolInicializado])
 
   const aluno = useMemo(
     () => alunos.find((a) => a.id === alunoId) || null,
@@ -90,7 +128,7 @@ export default function Treinos() {
     return treino ? treino.exercicios_json || [] : []
   }
 
-  // ----- Salvar dias da semana e restrições (ficha) -----
+  // ----- Salvar restrições (global) -----
   const salvarDadosFicha = async () => {
     if (!alunoId) {
       toast('Selecione um aluno primeiro.', 'aviso')
@@ -99,10 +137,9 @@ export default function Treinos() {
     setSalvandoFicha(true)
     try {
       await salvarFicha(alunoId, {
-        dias_semana: ficha.dias.join(', '),
-        restricoes: ficha.restricoes.trim()
+        restricoes: restricoes.trim()
       })
-      toast('Ficha atualizada (dias e restrições).')
+      toast('Restrições salvas.')
     } catch (e) {
       toast(e.message || 'Erro ao salvar a ficha.', 'erro')
     } finally {
@@ -110,23 +147,52 @@ export default function Treinos() {
     }
   }
 
-  const alternarDiaSemana = (dia) =>
-    setFicha((f) => ({
-      ...f,
-      dias: f.dias.includes(dia)
-        ? f.dias.filter((d) => d !== dia)
-        : [...f.dias, dia]
-    }))
+  // ----- Alternar dia da semana de um card de treino -----
+  const alternarDiaTreino = async (dia, diaSemana) => {
+    if (!alunoId) {
+      toast('Selecione um aluno primeiro.', 'aviso')
+      return
+    }
+    const atual = diasPorTreino[dia] || []
+    const novos = atual.includes(diaSemana)
+      ? atual.filter((d) => d !== diaSemana)
+      : [...atual, diaSemana]
+    setDiasPorTreino((prev) => ({ ...prev, [dia]: novos }))
+    try {
+      const exercicios = listaExercicios(dia)
+      const treino = treinos.find((t) => t.dia_semana === dia)
+      if (novos.length === 0 && exercicios.length === 0 && treino) {
+        await removerDia(treino.id)
+      } else {
+        await salvarDia(alunoId, dia, exercicios, {
+          dias_semana: novos.join(', '),
+          restricoes: restricoes.trim()
+        })
+      }
+      toast(`Treino ${dia}: ${novos.length ? novos.join(', ') : 'sem dias marcados'}`)
+    } catch (e) {
+      setDiasPorTreino((prev) => ({ ...prev, [dia]: atual }))
+      toast(e.message || 'Erro ao salvar os dias.', 'erro')
+    }
+  }
 
   // ----- Persistência de exercícios -----
   const persistir = async (dia, exercicios) => {
     if (exercicios.length === 0) {
       const treino = treinos.find((t) => t.dia_semana === dia)
-      if (treino) await removerDia(treino.id)
+      const temDias = (diasPorTreino[dia] || []).length > 0
+      if (treino && !temDias) {
+        await removerDia(treino.id)
+      } else if (treino) {
+        await salvarDia(alunoId, dia, [], {
+          dias_semana: diasPorTreino[dia].join(', '),
+          restricoes: restricoes.trim()
+        })
+      }
     } else {
       await salvarDia(alunoId, dia, exercicios, {
-        dias_semana: ficha.dias.join(', '),
-        restricoes: ficha.restricoes.trim()
+        dias_semana: (diasPorTreino[dia] || []).join(', '),
+        restricoes: restricoes.trim()
       })
     }
   }
@@ -160,17 +226,64 @@ export default function Treinos() {
     }
   }
 
+  // ----- Macrociclo -----
+  const salvarMacrociclo = async () => {
+    if (!alunoId) {
+      toast('Selecione um aluno primeiro.', 'aviso')
+      return
+    }
+    const preenchidas = semanas.filter(
+      (s) => s.foco || s.volume || s.intensidade || s.obs
+    )
+    setSalvandoMacro(true)
+    try {
+      await salvarMacro(alunoId, preenchidas)
+      toast(`Macrociclo salvo (${preenchidas.length} semana(s) preenchidas).`)
+      setModalMacro(false)
+    } catch (e) {
+      toast(e.message || 'Erro ao salvar o macrociclo. Verifique se a tabela macrociclo existe no Supabase.', 'erro')
+    } finally {
+      setSalvandoMacro(false)
+    }
+  }
+
+  const setSemana = (semana, campo, valor) =>
+    setSemanas((prev) =>
+      prev.map((s) => (s.semana === semana ? { ...s, [campo]: valor } : s))
+    )
+
   if (carregandoAlunos) return <Spinner />
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-extrabold tracking-tight text-zinc-900 dark:text-zinc-100">
-          Ficha de Treino
-        </h1>
-        <p className="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400">
-          Dias da semana, restrições e treinos do aluno (A, B, C...).
-        </p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-extrabold tracking-tight text-zinc-900 dark:text-zinc-100">
+            Ficha de Treino
+          </h1>
+          <p className="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400">
+            Marque os dias de cada treino (A, B, C, D) e monte os exercícios.
+          </p>
+        </div>
+        <Button
+          variante="secundario"
+          tamanho="sm"
+          onClick={() => {
+            setSemanas(
+              macroDados?.semanas_json?.length
+                ? SEMANAS_VAZIAS.map((base, i) => ({
+                    ...base,
+                    ...(macroDados.semanas_json[i] || {})
+                  }))
+                : SEMANAS_VAZIAS
+            )
+            setModalMacro(true)
+          }}
+          disabled={!alunoId}
+        >
+          <ListTree className="h-4 w-4" />
+          Macrociclo 12 semanas
+        </Button>
       </div>
 
       {/* ---------- Seleção de aluno ---------- */}
@@ -204,88 +317,91 @@ export default function Treinos() {
         </Card>
       ) : (
         <>
-          {/* ---------- Configurações da Ficha (dias + restrições) ---------- */}
+          {/* ---------- Restrições (globais) ---------- */}
           <Card className="p-5">
             <div className="mb-4 flex items-center gap-2">
-              <CalendarDays className="h-5 w-5 text-primary-600" />
+              <HeartPulse className="h-5 w-5 text-primary-600" />
               <h2 className="font-bold text-zinc-900 dark:text-zinc-100">
-                Configurações da Ficha
+                Restrições de movimento / Cuidados
               </h2>
             </div>
-
-            <div>
-              <Label>Dias da semana</Label>
-              <div className="flex flex-wrap gap-2">
-                {OPCOES_DIAS_SEMANA.map((dia) => {
-                  const ativo = ficha.dias.includes(dia)
-                  return (
-                    <button
-                      key={dia}
-                      type="button"
-                      onClick={() => alternarDiaSemana(dia)}
-                      className={`rounded-full px-3 py-1.5 text-sm font-semibold transition ${
-                        ativo
-                          ? 'bg-primary-600 text-white shadow'
-                          : 'bg-white text-zinc-600 ring-1 ring-zinc-200 hover:bg-zinc-50 dark:bg-zinc-800 dark:text-zinc-300 dark:ring-zinc-700 dark:hover:bg-zinc-700'
-                      }`}
-                    >
-                      {dia}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-
-            <div className="mt-4">
-              <Label className="flex items-center gap-1.5">
-                <HeartPulse className="h-3.5 w-3.5" />
-                Restrições de movimento / Cuidados
-              </Label>
-              <textarea
-                value={ficha.restricoes}
-                onChange={(e) => setFicha((f) => ({ ...f, restricoes: e.target.value }))}
-                rows={3}
-                placeholder="Ex.: Lesão no ombro direito, evitar carga no joelho..."
-                className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition placeholder:text-zinc-400 focus:border-primary-500 focus:ring-2 focus:ring-primary-500/30 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder:text-zinc-500"
-              />
-            </div>
-
-            <div className="mt-4 flex justify-end">
+            <textarea
+              value={restricoes}
+              onChange={(e) => setRestricoes(e.target.value)}
+              rows={2}
+              placeholder="Ex.: Lesão no ombro direito, evitar carga no joelho..."
+              className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition placeholder:text-zinc-400 focus:border-primary-500 focus:ring-2 focus:ring-primary-500/30 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder:text-zinc-500"
+            />
+            <div className="mt-3 flex items-center justify-between gap-3">
+              <p className="text-xs text-zinc-400">
+                <Info className="mr-1 inline h-3.5 w-3.5" />
+                Os dias da semana são marcados em cada card de treino abaixo.
+              </p>
               <Button onClick={salvarDadosFicha} carregando={salvandoFicha} tamanho="sm">
                 <Save className="h-3.5 w-3.5" />
-                Salvar ficha
+                Salvar restrições
               </Button>
             </div>
           </Card>
 
-          {/* ---------- Dias da ficha (Treino A, B, C, D) ---------- */}
+          {/* ---------- Cards de treino (A, B, C, D) ---------- */}
           <div className="grid gap-4 md:grid-cols-2">
             {DIAS_FICHA.map((dia) => {
               const exercicios = listaExercicios(dia)
+              const dias = diasPorTreino[dia] || []
               return (
                 <Card key={dia} className="flex flex-col overflow-hidden">
-                  <div className="flex items-center justify-between border-b border-zinc-200 bg-zinc-50 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-800/60">
-                    <div className="flex items-center gap-3">
-                      <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary-600 text-sm font-extrabold text-white shadow">
-                        {dia}
-                      </span>
-                      <div>
-                        <p className="font-bold text-zinc-900 dark:text-zinc-100">
-                          Treino {dia}
-                        </p>
-                        <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                          {exercicios.length} exercício(s)
-                        </p>
+                  <div className="border-b border-zinc-200 bg-zinc-50 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-800/60">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary-600 text-sm font-extrabold text-white shadow">
+                          {dia}
+                        </span>
+                        <div>
+                          <p className="font-bold text-zinc-900 dark:text-zinc-100">
+                            Treino {dia}
+                          </p>
+                          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                            {exercicios.length} exercício(s)
+                            {dias.length > 0 && (
+                              <span className="ml-1 font-semibold text-primary-600 dark:text-primary-400">
+                                · {dias.join(', ')}
+                              </span>
+                            )}
+                          </p>
+                        </div>
                       </div>
+                      <Button
+                        variante="secundario"
+                        tamanho="sm"
+                        onClick={() => setModal({ dia, indice: null })}
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        Exercício
+                      </Button>
                     </div>
-                    <Button
-                      variante="secundario"
-                      tamanho="sm"
-                      onClick={() => setModal({ dia, indice: null })}
-                    >
-                      <Plus className="h-3.5 w-3.5" />
-                      Exercício
-                    </Button>
+
+                    {/* Caixinhas dos dias da semana */}
+                    <div className="mt-3 flex flex-wrap gap-1.5">
+                      {DIAS_SEMANA.map((d) => {
+                        const ativo = dias.includes(d.nome)
+                        return (
+                          <button
+                            key={d.nome}
+                            type="button"
+                            onClick={() => alternarDiaTreino(dia, d.nome)}
+                            title={`Marcar ${d.nome} para o Treino ${dia}`}
+                            className={`flex h-7 min-w-[34px] items-center justify-center rounded-lg px-1.5 text-[10px] font-bold transition ${
+                              ativo
+                                ? 'bg-primary-600 text-white shadow'
+                                : 'bg-white text-zinc-500 ring-1 ring-zinc-200 hover:bg-zinc-100 dark:bg-zinc-900 dark:text-zinc-400 dark:ring-zinc-700 dark:hover:bg-zinc-700'
+                            }`}
+                          >
+                            {d.abreviado}
+                          </button>
+                        )
+                      })}
+                    </div>
                   </div>
 
                   {exercicios.length === 0 ? (
@@ -345,7 +461,7 @@ export default function Treinos() {
 
           <p className="text-center text-xs text-zinc-400 dark:text-zinc-500">
             Ficha de treino de <span className="font-semibold">{aluno.nome}</span> —
-            salva automaticamente no Supabase.
+            os dias marcados em cada card aparecem como "Treino de Hoje" no Portal do Aluno.
           </p>
         </>
       )}
@@ -363,6 +479,83 @@ export default function Treinos() {
             onCancelar={() => setModal(null)}
           />
         )}
+      </Modal>
+
+      {/* ---------- Modal do Macrociclo (12 semanas) ---------- */}
+      <Modal
+        aberto={modalMacro}
+        titulo="Macrociclo · 12 semanas"
+        onFechar={() => setModalMacro(false)}
+        largura="max-w-4xl"
+      >
+        <div className="space-y-3">
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+            Preencha o planejamento de cada semana. As semanas em branco são
+            ignoradas ao salvar. O aluno verá o macrociclo no Portal dele.
+          </p>
+          {semanas.map((s) => (
+            <div
+              key={s.semana}
+              className="rounded-xl border border-zinc-200 p-3 dark:border-zinc-800"
+            >
+              <div className="mb-2 flex items-center gap-2">
+                <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-primary-600 text-xs font-extrabold text-white">
+                  {s.semana}
+                </span>
+                <p className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
+                  Semana {s.semana}
+                </p>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                <div>
+                  <Label className="!text-[10px]">Foco</Label>
+                  <Input
+                    value={s.foco}
+                    onChange={(e) => setSemana(s.semana, 'foco', e.target.value)}
+                    placeholder="Ex.: Hipertrofia"
+                    className="!py-1.5 !text-xs"
+                  />
+                </div>
+                <div>
+                  <Label className="!text-[10px]">Volume</Label>
+                  <Input
+                    value={s.volume}
+                    onChange={(e) => setSemana(s.semana, 'volume', e.target.value)}
+                    placeholder="Ex.: 3x10"
+                    className="!py-1.5 !text-xs"
+                  />
+                </div>
+                <div>
+                  <Label className="!text-[10px]">Intensidade</Label>
+                  <Input
+                    value={s.intensidade}
+                    onChange={(e) => setSemana(s.semana, 'intensidade', e.target.value)}
+                    placeholder="Ex.: 70-75%"
+                    className="!py-1.5 !text-xs"
+                  />
+                </div>
+                <div>
+                  <Label className="!text-[10px]">Obs.</Label>
+                  <Input
+                    value={s.obs}
+                    onChange={(e) => setSemana(s.semana, 'obs', e.target.value)}
+                    placeholder="Observações"
+                    className="!py-1.5 !text-xs"
+                  />
+                </div>
+              </div>
+            </div>
+          ))}
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variante="fantasma" onClick={() => setModalMacro(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={salvarMacrociclo} carregando={salvandoMacro}>
+              <Save className="h-4 w-4" />
+              Salvar macrociclo
+            </Button>
+          </div>
+        </div>
       </Modal>
     </div>
   )
@@ -403,8 +596,9 @@ function FormExercicio({ inicial = null, onSalvar, onCancelar }) {
           placeholder="Digite ou escolha da base..."
         />
         <p className="mt-1.5 text-xs text-zinc-400">
-          Sugestões da base de exercícios. Pode digitar qualquer nome — se não
-          existir na base, será salvo normalmente.
+          Sugestões da base de exercícios (tabela{' '}
+          <code className="font-mono">exercicios_base</code>). Pode digitar
+          qualquer nome — se não existir na base, será salvo normalmente.
         </p>
         {erros.nome && (
           <p className="mt-1 text-xs font-medium text-red-600">{erros.nome}</p>
@@ -469,22 +663,32 @@ function FormExercicio({ inicial = null, onSalvar, onCancelar }) {
 function ComboboxExercicio({ valor, onChange, placeholder }) {
   const [base, setBase] = useState([])
   const [aberto, setAberto] = useState(false)
+  const [erroBase, setErroBase] = useState('')
+  const [carregado, setCarregado] = useState(false)
 
   // Carrega a base de exercícios do Supabase (Musculação, Funcional, Corrida)
   const carregarBase = useCallback(async () => {
+    setCarregado(false)
+    setErroBase('')
     const { data, error } = await supabase
       .from('exercicios_base')
       .select('*')
       .limit(1000)
-    if (error || !data) return
+    if (error) {
+      setErroBase(error.message)
+      setBase([])
+      setCarregado(true)
+      return
+    }
     // Normaliza nomes de coluna (aceita variações de schema)
-    const normalizados = data
+    const normalizados = (data || [])
       .map((r) => ({
         nome: r.nome || r.exercicio || r.titulo || r.nome_exercicio || '',
         categoria: r.categoria || r.tipo || r.grupo || r.modalidade || ''
       }))
       .filter((x) => x.nome)
     setBase(normalizados)
+    setCarregado(true)
   }, [])
 
   useEffect(() => {
@@ -506,11 +710,27 @@ function ComboboxExercicio({ valor, onChange, placeholder }) {
           onChange(e.target.value)
           setAberto(true)
         }}
-        onFocus={() => setAberto(true)}
+        onFocus={() => {
+          setAberto(true)
+          if (!carregado) carregarBase()
+        }}
         onBlur={() => setTimeout(() => setAberto(false), 150)}
         placeholder={placeholder}
         autoFocus
       />
+
+      {aberto && erroBase && (
+        <div className="mt-1 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-600 dark:text-amber-400">
+          Base de exercícios indisponível: {erroBase}
+        </div>
+      )}
+
+      {aberto && !erroBase && carregado && termo && filtradas.length === 0 && (
+        <div className="mt-1 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400">
+          Nenhum exercício encontrado na base para "{valor}".
+        </div>
+      )}
+
       {aberto && filtradas.length > 0 && (
         <ul className="absolute z-20 mt-1 w-full overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-xl dark:border-zinc-700 dark:bg-zinc-800">
           {filtradas.map((e) => (
