@@ -21,7 +21,25 @@ import {
 } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 
-const ITENS_NAV = [
+const ITENS_SIDEBAR = [
+  { to: '/', label: 'Início', icone: LayoutDashboard },
+  { to: '/alunos', label: 'Alunos', icone: Users },
+  { to: '/financeiro', label: 'Financeiro', icone: Wallet },
+  { to: '/treinos', label: 'Treinos', icone: Dumbbell },
+  { to: '/checkins', label: 'Check-in', icone: CalendarCheck },
+  {
+    to: '/crm',
+    label: 'CRM',
+    icone: Filter,
+    filhos: [
+      { to: '/crm/leads', label: 'Leads (Kanban)' },
+      { to: '/crm/agenda', label: 'Agenda' }
+    ]
+  },
+  { to: '/site', label: 'Site Institucional', icone: Globe }
+]
+
+const ITENS_BOTTOMNAV = [
   { to: '/', label: 'Início', icone: LayoutDashboard },
   { to: '/alunos', label: 'Alunos', icone: Users },
   { to: '/financeiro', label: 'Financeiro', icone: Wallet },
@@ -62,13 +80,15 @@ export default function Layout() {
   const localizacao = useLocation()
 
   useEffect(() => {
-    const atual = ITENS_NAV.find((i) =>
+    const atual = ITENS_SIDEBAR.find((i) =>
       i.to === '/' ? localizacao.pathname === '/' : localizacao.pathname.startsWith(i.to)
     )
     if (localizacao.pathname.startsWith('/site')) {
       setTituloPagina('Site Institucional')
     } else if (localizacao.pathname.startsWith('/crm/agenda')) {
       setTituloPagina('Agenda')
+    } else if (localizacao.pathname.startsWith('/crm')) {
+      setTituloPagina('CRM · Leads')
     } else {
       setTituloPagina(atual?.label || 'Início')
     }
@@ -107,58 +127,65 @@ export default function Layout() {
         </div>
 
         <nav className="flex-1 space-y-1 px-3">
-          {ITENS_NAV.map(({ to, label, icone: Icone }) => (
-            <NavLink
-              key={to}
-              to={to}
-              end={to === '/'}
-              className={({ isActive }) =>
-                `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition ${
-                  isActive
-                    ? 'bg-primary-600 text-white shadow'
-                    : 'text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800'
-                }`
-              }
-            >
-              <Icone className="h-5 w-5" />
-              {label}
-            </NavLink>
+          {ITENS_SIDEBAR.map(({ to, label, icone: Icone, filhos }) => (
+            <div key={to} className="space-y-1">
+              <NavLink
+                to={to}
+                end={to === '/'}
+                className={({ isActive }) =>
+                  `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition ${
+                    isActive
+                      ? 'bg-primary-600 text-white shadow'
+                      : 'text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800'
+                  }`
+                }
+              >
+                <Icone className="h-5 w-5" />
+                {label}
+              </NavLink>
+              {filhos && (
+                <div className="ml-4 space-y-1 border-l border-zinc-200 pl-3 dark:border-zinc-800">
+                  {filhos.map((f) => (
+                    <NavLink
+                      key={f.to}
+                      to={f.to}
+                      className={({ isActive }) =>
+                        `flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition ${
+                          isActive
+                            ? 'bg-primary-600/10 text-primary-700 dark:text-primary-300'
+                            : 'text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800'
+                        }`
+                      }
+                    >
+                      <span className="h-1.5 w-1.5 rounded-full bg-current opacity-50" />
+                      {f.label}
+                    </NavLink>
+                  ))}
+                </div>
+              )}
+            </div>
           ))}
         </nav>
 
         <div className="space-y-1 border-t border-zinc-200 p-3 dark:border-zinc-800">
-          <a
-            href="#/aluno"
-            target="_blank"
-            rel="noreferrer"
-            className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-zinc-600 transition hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
-            title="Abrir o Portal do Aluno em nova aba"
-          >
-            <User className="h-5 w-5" />
-            Portal do Aluno
-          </a>
-            <NavLink
-              to="/site"
-              className={({ isActive }) =>
-                `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition ${
-                  isActive
-                    ? 'bg-primary-600 text-white shadow'
-                    : 'text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800'
-                }`
-              }
-              title="Visualizar o Site Institucional"
+            <a
+              href="#/aluno"
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-zinc-600 transition hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              title="Abrir o Portal do Aluno em nova aba"
             >
-              <Globe className="h-5 w-5" />
-              Site Institucional
-            </NavLink>
+              <User className="h-5 w-5" />
+              Portal do Aluno
+            </a>
             <button
               onClick={ciclarTema}
               className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-zinc-600 transition hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
               title={`Tema: ${TemaAtual.label}`}
             >
-            <TemaIcone className="h-5 w-5" />
-            Tema: {TemaAtual.label}
-          </button>
+              <TemaIcone className="h-5 w-5" />
+              Tema: {TemaAtual.label}
+            </button>
           <NavLink
             to="/configuracoes"
             className={({ isActive }) =>
@@ -229,7 +256,7 @@ export default function Layout() {
       {/* ---------- Bottom nav (mobile) ---------- */}
       <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-zinc-200 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden dark:border-zinc-800 dark:bg-zinc-900/95">
         <div className="grid grid-cols-6">
-          {ITENS_NAV.map(({ to, label, icone: Icone }) => (
+          {ITENS_BOTTOMNAV.map(({ to, label, icone: Icone }) => (
             <NavLink
               key={to}
               to={to}
