@@ -15,7 +15,9 @@ import {
   Sun,
   Moon,
   Loader2,
-  User
+  User,
+  Filter,
+  Globe
 } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 
@@ -24,7 +26,8 @@ const ITENS_NAV = [
   { to: '/alunos', label: 'Alunos', icone: Users },
   { to: '/financeiro', label: 'Financeiro', icone: Wallet },
   { to: '/treinos', label: 'Treinos', icone: Dumbbell },
-  { to: '/checkins', label: 'Check-in', icone: CalendarCheck }
+  { to: '/checkins', label: 'Check-in', icone: CalendarCheck },
+  { to: '/crm', label: 'CRM', icone: Filter }
 ]
 
 const TEMAS = {
@@ -62,7 +65,13 @@ export default function Layout() {
     const atual = ITENS_NAV.find((i) =>
       i.to === '/' ? localizacao.pathname === '/' : localizacao.pathname.startsWith(i.to)
     )
-    setTituloPagina(atual?.label || 'Início')
+    if (localizacao.pathname.startsWith('/site')) {
+      setTituloPagina('Site Institucional')
+    } else if (localizacao.pathname.startsWith('/crm/agenda')) {
+      setTituloPagina('Agenda')
+    } else {
+      setTituloPagina(atual?.label || 'Início')
+    }
     document.title = `${tituloPagina} · ${config.nome_academia}`
   }, [localizacao, config.nome_academia, tituloPagina])
 
@@ -128,11 +137,25 @@ export default function Layout() {
             <User className="h-5 w-5" />
             Portal do Aluno
           </a>
-          <button
-            onClick={ciclarTema}
-            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-zinc-600 transition hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
-            title={`Tema: ${TemaAtual.label}`}
-          >
+            <NavLink
+              to="/site"
+              className={({ isActive }) =>
+                `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition ${
+                  isActive
+                    ? 'bg-primary-600 text-white shadow'
+                    : 'text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800'
+                }`
+              }
+              title="Visualizar o Site Institucional"
+            >
+              <Globe className="h-5 w-5" />
+              Site Institucional
+            </NavLink>
+            <button
+              onClick={ciclarTema}
+              className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-zinc-600 transition hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              title={`Tema: ${TemaAtual.label}`}
+            >
             <TemaIcone className="h-5 w-5" />
             Tema: {TemaAtual.label}
           </button>
@@ -173,6 +196,13 @@ export default function Layout() {
               >
                 <User className="h-5 w-5" />
               </a>
+              <NavLink
+                to="/site"
+                className="rounded-lg p-2 text-zinc-600 transition hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                title="Site Institucional"
+              >
+                <Globe className="h-5 w-5" />
+              </NavLink>
               <button
                 onClick={ciclarTema}
                 className="rounded-lg p-2 text-zinc-600 transition hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
@@ -198,7 +228,7 @@ export default function Layout() {
 
       {/* ---------- Bottom nav (mobile) ---------- */}
       <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-zinc-200 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden dark:border-zinc-800 dark:bg-zinc-900/95">
-        <div className="grid grid-cols-5">
+        <div className="grid grid-cols-6">
           {ITENS_NAV.map(({ to, label, icone: Icone }) => (
             <NavLink
               key={to}

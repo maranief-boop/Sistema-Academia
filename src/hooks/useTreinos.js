@@ -1,6 +1,7 @@
 // =====================================================================
 // Hook de treinos — ficha por aluno dividida por dia_semana (A, B, C...)
-// exercicios_json: [{ nome, series, repeticoes, carga }]
+// exercicios_json: [{ nome, series, repeticoes, carga, url_video }]
+// Campos de ficha: dias_semana (ex.: "Segunda, Quarta, Sexta") e restricoes
 // =====================================================================
 import { useCallback, useState } from 'react'
 import { supabase } from '../lib/supabase'
@@ -27,14 +28,17 @@ export function useTreinos() {
   }, [])
 
   // UPSERT — salva (cria ou atualiza) a lista de exercícios de um dia
-  const salvarDia = useCallback(async (alunoId, diaSemana, exercicios) => {
+  // `ficha` (opcional) carrega dias_semana/restricoes junto no registro
+  const salvarDia = useCallback(async (alunoId, diaSemana, exercicios, ficha = {}) => {
     const { data, error } = await supabase
       .from('treinos')
       .upsert(
         {
           aluno_id: alunoId,
           dia_semana: diaSemana,
-          exercicios_json: exercicios
+          exercicios_json: exercicios,
+          dias_semana: ficha.dias_semana,
+          restricoes: ficha.restricoes
         },
         { onConflict: 'aluno_id,dia_semana' }
       )
@@ -50,6 +54,25 @@ export function useTreinos() {
     return data
   }, [])
 
+  // UPDATE — grava os campos da ficha (dias_semana e restricoes) em TODAS
+  // as linhas do aluno, para que qualquer dia leia os mesmos dados
+  const salvarFicha = useCallback(async (alunoId, ficha) => {
+    const { data, error } = await supabase
+      .from('treinos')
+      .update({ dias_semana: ficha.dias_semana, restricoes: ficha.restricoes })
+      .eq('aluno_id', alunoId)
+      .select('id, dia_semana, dias_semana, restricoes')
+    if (error) throw error
+    setTreinos((prev) =>
+      prev.map((t) =>
+        t.aluno_id === alunoId
+          ? { ...t, dias_semana: ficha.dias_semana, restricoes: ficha.restricoes }
+          : t
+      )
+    )
+    return data || []
+  }, [])
+
   // DELETE — remove o treino de um dia (quando fica vazio)
   const removerDia = useCallback(async (id) => {
     const { error } = await supabase.from('treinos').delete().eq('id', id)
@@ -57,5 +80,12 @@ export function useTreinos() {
     setTreinos((prev) => prev.filter((t) => t.id !== id))
   }, [])
 
-  return { treinos, carregando, carregarTreinos, salvarDia, removerDia }
+  return {
+    treinos,
+    carregando,
+    carregarTreinos,
+    salvarDia,
+    salvarFicha,
+    removerDia
+  }
 }

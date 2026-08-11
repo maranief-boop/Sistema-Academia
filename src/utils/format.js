@@ -38,6 +38,13 @@ export function paraInputDate(iso) {
   return `${d.getFullYear()}-${mes}-${dia}`
 }
 
+// Formata uma data (local) como YYYY-MM-DD — evita deslocamento de fuso
+export function dataParaInput(d = new Date()) {
+  const mes = String(d.getMonth() + 1).padStart(2, '0')
+  const dia = String(d.getDate()).padStart(2, '0')
+  return `${d.getFullYear()}-${mes}-${dia}`
+}
+
 // Dias corridos desde uma data até hoje
 export function diasDesde(iso) {
   if (!iso) return null

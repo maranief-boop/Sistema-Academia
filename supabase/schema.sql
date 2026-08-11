@@ -33,18 +33,84 @@ create index if not exists alunos_vencimento_idx on public.alunos (data_vencimen
 -- ---------------------------------------------------------------------
 -- Tabela: treinos (ficha por aluno, dividida por dia_semana: A, B, C...)
 -- exercicios_json segue o formato:
---   [ { "nome": "Supino", "series": 4, "repeticoes": "12", "carga": "30kg" }, ... ]
+--   [ { "nome": "Supino", "series": 4, "repeticoes": "12",
+--       "carga": "30kg", "url_video": "https://youtu.be/..." }, ... ]
+-- dias_semana: ex.: "Segunda, Quarta, Sexta"
+-- restricoes:  texto livre (lesões / cuidados)
 -- ---------------------------------------------------------------------
 create table if not exists public.treinos (
   id              uuid primary key default gen_random_uuid(),
   aluno_id        uuid not null references public.alunos(id) on delete cascade,
   dia_semana      text not null,
   exercicios_json jsonb not null default '[]'::jsonb,
+  dias_semana     text,
+  restricoes      text,
   created_at      timestamptz not null default now()
 );
 
+-- Para bancos já existentes: adiciona as colunas novas sem quebrar os dados
+alter table public.treinos add column if not exists dias_semana text;
+alter table public.treinos add column if not exists restricoes text;
+
 -- Garante um único treino por (aluno, dia)
 create unique index if not exists treinos_aluno_dia_key on public.treinos (aluno_id, dia_semana);
+
+-- ---------------------------------------------------------------------
+-- Tabela: exercicios_base (busca inteligente no cadastro de exercícios)
+-- Categorias de exemplo: Musculação, Funcional, Corrida
+-- ---------------------------------------------------------------------
+create table if not exists public.exercicios_base (
+  id          uuid primary key default gen_random_uuid(),
+  nome        text not null,
+  categoria   text not null default 'musculação',
+  created_at  timestamptz not null default now()
+);
+
+-- Garante a coluna categoria em tabelas já existentes
+alter table public.exercicios_base add column if not exists categoria text not null default 'musculação';
+
+create index if not exists exercicios_base_nome_idx on public.exercicios_base (lower(nome));
+
+-- Seed inicial (só insere o que ainda não existe — seguro para bancos já usados;
+-- se a sua base já está populada, este bloco simplesmente não duplica nada)
+insert into public.exercicios_base (nome, categoria)
+select s.nome, s.categoria
+from (values
+  ('Supino reto', 'musculação'),
+  ('Supino inclinado', 'musculação'),
+  ('Agachamento', 'musculação'),
+  ('Agachamento búlgaro', 'musculação'),
+  ('Leg press 45', 'musculação'),
+  ('Cadeira extensora', 'musculação'),
+  ('Cadeira flexora', 'musculação'),
+  ('Remada curvada', 'musculação'),
+  ('Puxada frontal', 'musculação'),
+  ('Desenvolvimento militar', 'musculação'),
+  ('Elevação lateral', 'musculação'),
+  ('Rosca direta', 'musculação'),
+  ('Rosca martelo', 'musculação'),
+  ('Tríceps corda', 'musculação'),
+  ('Tríceps testa', 'musculação'),
+  ('Abdominal supra', 'musculação'),
+  ('Prancha abdominal', 'musculação'),
+  ('Burpee', 'funcional'),
+  ('Polichinelo', 'funcional'),
+  ('Mountain climber', 'funcional'),
+  ('Afundo', 'funcional'),
+  ('Agachamento com salto', 'funcional'),
+  ('Flexão de braço', 'funcional'),
+  ('Ponte de glúteo', 'funcional'),
+  ('Kettlebell swing', 'funcional'),
+  ('Pular corda', 'funcional'),
+  ('Corrida leve (trote)', 'corrida'),
+  ('Corrida moderada', 'corrida'),
+  ('Sprint intervalado', 'corrida'),
+  ('Corrida com elevação de joelhos', 'corrida'),
+  ('Escada alta', 'corrida')
+) as s(nome, categoria)
+where not exists (
+  select 1 from public.exercicios_base b where lower(b.nome) = lower(s.nome)
+);
 
 -- ---------------------------------------------------------------------
 -- Tabela: checkins (frequência / presença)
@@ -74,3 +140,35 @@ create table if not exists public.configuracoes (
 insert into public.configuracoes (id, nome_academia, cor_primaria)
 values (1, 'Minha Academia', '#16a34a')
 on conflict (id) do nothing;
+
+-- ---------------------------------------------------------------------
+-- Tabela: leads (Site Institucional + CRM — pipeline de vendas)
+-- Estágios: novo -> atendimento -> agendamento -> convertido
+-- "Agendamentos" são leads com data_preferida preenchida (agenda do CRM).
+-- ---------------------------------------------------------------------
+create table if not exists public.leads (
+  id                uuid primary key default gen_random_uuid(),
+  nome              text not null,
+  telefone          text,
+  origem            text not null default 'Site Institucional',
+  stage             text not null default 'novo',
+  notas             text,
+  data_preferida    date,
+  horario_preferido text,
+  data_captura      timestamptz not null default now(),
+  created_at        timestamptz not null default now(),
+  constraint leads_stage_check check (stage in ('novo', 'atendimento', 'agendamento', 'convertido'))
+);
+
+-- Para bancos já existentes: garante as colunas novas sem quebrar os dados
+alter table public.leads add column if not exists telefone text;
+alter table public.leads add column if not exists origem text not null default 'Site Institucional';
+alter table public.leads add column if not exists stage text not null default 'novo';
+alter table public.leads add column if not exists notas text;
+alter table public.leads add column if not exists data_preferida date;
+alter table public.leads add column if not exists horario_preferido text;
+alter table public.leads add column if not exists data_captura timestamptz not null default now();
+
+create index if not exists leads_stage_idx on public.leads (stage);
+create index if not exists leads_captura_idx on public.leads (data_captura desc);
+create index if not exists leads_data_preferida_idx on public.leads (data_preferida);

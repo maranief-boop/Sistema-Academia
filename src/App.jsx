@@ -12,6 +12,9 @@ import Treinos from './pages/Treinos'
 import Checkins from './pages/Checkins'
 import Configuracoes from './pages/Configuracoes'
 import PortalAluno from './pages/PortalAluno'
+import Crm from './pages/Crm'
+import CrmAgenda from './pages/CrmAgenda'
+import SiteInstitucional from './pages/SiteInstitucional'
 
 export default function App() {
   return (
@@ -28,6 +31,11 @@ export default function App() {
               <Route path="/financeiro" element={<Financeiro />} />
               <Route path="/treinos" element={<Treinos />} />
               <Route path="/checkins" element={<Checkins />} />
+              {/* Módulo CRM (Site / Leads / Agenda) — Supabase */}
+              <Route path="/crm" element={<Navigate to="/crm/leads" replace />} />
+              <Route path="/crm/leads" element={<Crm />} />
+              <Route path="/crm/agenda" element={<CrmAgenda />} />
+              <Route path="/site" element={<SiteInstitucional />} />
               <Route path="/configuracoes" element={<Configuracoes />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>

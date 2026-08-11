@@ -1,0 +1,29 @@
+Crie um site institucional completo + CRM + chatbot para uma academia.
+
+Use esta mesma arquitetura:
+- HTML/CSS/JS puro (Tailwind via CDN, Font Awesome)
+- Firebase Firestore para leads (configurar com minhas credenciais)
+- Cloudflare Worker para FAQ (sem API externa)
+- Vou hospedar no Cloudflare Pages
+
+Informações da academia:
+- Nome: [NOME DA ACADEMIA]
+- Slogan: [SLOGAN]
+- Endereço: [RUA, NUMERO, BAIRRO, CIDADE - UF]
+- WhatsApp: [DDD] [NUMERO]
+- Email: [EMAIL]
+- Horários: [SEG-SEX e SAB]
+- Modalidades: [LISTA]
+- Planos a partir de: R$ [VALOR]
+- Cores: primaria [COR], secundaria [COR]
+- Diferenciais: [CLIMATIZACAO, ESTACIONAMENTO, etc]
+- Instagram: @[usuario]
+- Google avaliacao: [NOTA]
+
+Já cria:
+1. index.html - hero, modalidades, estrutura, calculadora IMC com CTA, mapa, footer, lead modal com data+horario, chat FAQ, WhatsApp float
+2. dashboard.html - CRM com kanban, graficos, agenda calendario, CSV, criar/editar/excluir lead
+3. login.html - autenticacao Firebase Auth
+4. worker.js - FAQ completo sem API
+
+Use exatamente a mesma estrutura e funcionalidades do projeto IronFit Andradina, apenas substituindo identidade visual e dados.

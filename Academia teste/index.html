@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>IronFit Andradina - Academia em Andradina-SP</title>
+  <meta name="description" content="Transforme seu corpo e sua saúde no coração de Andradina. Musculação, HIIT, aulas coletivas e muito mais." />
+  <script src="https://cdn.tailwindcss.com">
+  </script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js">
+  </script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js">
+  </script>
+  <style>
+    html { scroll-behavior: smooth; }
+    body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; }
+    .whatsapp-float {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      z-index: 50;
+      width: 60px;
+      height: 60px;
+      border-radius: 50%;
+      background: #25D366;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 16px rgba(37, 211, 102, .4);
+      transition: transform .2s;
+      animation: pulse-whatsapp 2s infinite;
+    }
+    .whatsapp-float:hover { animation: none; transform: scale(1.1); }
+    .whatsapp-float i { font-size: 28px; color: #fff; }
+    @keyframes pulse-whatsapp {
+      0% { box-shadow: 0 0 0 0 rgba(37, 211, 102, .6); }
+      70% { box-shadow: 0 0 0 16px rgba(37, 211, 102, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(37, 211, 102, 0); }
+    }
+    .card-hover { transition: transform .3s, box-shadow .3s; }
+    .card-hover:hover { transform: translateY(-6px); }
+    .nav-link::after {
+      content: '';
+      display: block;
+      width: 0;
+      height: 2px;
+      background: #f97316;
+      transition: width .3s;
+    }
+    .nav-link:hover::after { width: 100%; }
+    .input-calc {
+      background: #1f2937;
+      border: 1px solid #374151;
+      color: #fff;
+      padding: 10px 14px;
+      border-radius: 8px;
+      width: 100%;
+      outline: none;
+      transition: border-color .3s;
+    }
+    .input-calc:focus { border-color: #f97316; }
+    input[type="range"] {
+      -webkit-appearance: none;
+      width: 100%;
+      height: 6px;
+      border-radius: 3px;
+      background: #374151;
+      outline: none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #f97316;
+      cursor: pointer;
+    }
+    @media (max-width: 768px) {
+      .mobile-menu { display: none; }
+      .mobile-menu.open { display: flex; }
+    }
+    .chat-btn {
+      position: fixed;
+      bottom: 24px;
+      left: 24px;
+      z-index: 50;
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      background: #f97316;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 16px rgba(249, 115, 22, .4);
+      cursor: pointer;
+      transition: transform .2s;
+      border: none;
+    }
+    .chat-btn:hover { transform: scale(1.1); }
+    .chat-btn i { font-size: 24px; color: #fff; }
+    .chat-box {
+      position: fixed;
+      bottom: 92px;
+      left: 24px;
+      z-index: 49;
+      width: 340px;
+      max-height: 460px;
+      background: #161616;
+      border: 1px solid #2a2a2a;
+      border-radius: 16px;
+      display: none;
+      flex-direction: column;
+      box-shadow: 0 8px 40px rgba(0,0,0,.6);
+      overflow: hidden;
+    }
+    .chat-box.open { display: flex; }
+    .chat-header {
+      background: #f97316;
+      padding: 14px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .chat-header h3 { font-size: 15px; font-weight: 700; color: #fff; }
+    .chat-header button { background: none; border: none; color: #fff; font-size: 18px; cursor: pointer; opacity: .8; }
+    .chat-header button:hover { opacity: 1; }
+    .chat-messages {
+      flex: 1;
+      padding: 14px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      max-height: 300px;
+      background: #111;
+    }
+    .chat-messages::-webkit-scrollbar { width: 4px; }
+    .chat-messages::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
+    .msg-bot, .msg-user {
+      max-width: 85%;
+      padding: 10px 14px;
+      border-radius: 12px;
+      font-size: 13px;
+      line-height: 1.5;
+      word-wrap: break-word;
+    }
+    .msg-bot {
+      background: #1f2937;
+      color: #d1d5db;
+      align-self: flex-start;
+      border-bottom-left-radius: 4px;
+    }
+    .msg-user {
+      background: #f97316;
+      color: #fff;
+      align-self: flex-end;
+      border-bottom-right-radius: 4px;
+    }
+    .chat-input-area {
+      display: flex;
+      gap: 8px;
+      padding: 12px 14px;
+      border-top: 1px solid #2a2a2a;
+      background: #161616;
+    }
+    .chat-input-area input {
+      flex: 1;
+      background: #1f2937;
+      border: 1px solid #374151;
+      color: #fff;
+      padding: 10px 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      outline: none;
+    }
+    .chat-input-area input:focus { border-color: #f97316; }
+    .chat-input-area button {
+      background: #f97316;
+      border: none;
+      color: #fff;
+      width: 40px;
+      height: 40px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 16px;
+      transition: background .2s;
+    }
+    .chat-input-area button:hover { background: #ea580c; }
+    .chat-suggestions {
+      padding: 8px 14px 4px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      background: #111;
+    }
+    .chat-suggestions button {
+      background: #1f2937;
+      border: 1px solid #374151;
+      color: #9ca3af;
+      font-size: 11px;
+      padding: 5px 10px;
+      border-radius: 14px;
+      cursor: pointer;
+      transition: all .2s;
+    }
+    .chat-suggestions button:hover { background: #f97316; color: #fff; border-color: #f97316; }
+    .lead-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.75);
+      z-index: 100;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      backdrop-filter: blur(4px);
+    }
+    .lead-overlay.open { display: flex; }
+    .lead-modal {
+      background: #161616;
+      border: 1px solid #2a2a2a;
+      border-radius: 20px;
+      width: 90%;
+      max-width: 420px;
+      padding: 32px 28px 24px;
+      animation: modalIn .3s;
+    }
+    @keyframes modalIn {
+      from { opacity: 0; transform: scale(.95) translateY(10px); }
+      to { opacity: 1; transform: scale(1) translateY(0); }
+    }
+    .lead-modal input {
+      background: #1f2937;
+      border: 1px solid #374151;
+      color: #fff;
+      padding: 12px 16px;
+      border-radius: 10px;
+      width: 100%;
+      outline: none;
+      font-size: 14px;
+      transition: border .2s;
+    }
+    .lead-modal input:focus { border-color: #f97316; }
+    .lead-modal .field-icon {
+      position: absolute;
+      left: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: #6b7280;
+      font-size: 15px;
+    }
+  </style>
+</head>
+<body class="bg-[#0a0a0a] text-gray-100">
+
+  <div id="leadModal" class="lead-overlay">
+    <div class="lead-modal">
+      <div class="text-center mb-6">
+        <div class="w-14 h-14 mx-auto mb-3 bg-orange-500/10 rounded-full flex items-center justify-center text-orange-500 text-2xl">
+          <i class="fas fa-dumbbell"></i>
+        </div>
+        <h3 class="text-xl font-bold text-white">Agende sua Aula Experimental</h3>
+        <p class="text-gray-500 text-sm mt-1">Deixe seus dados e entraremos em contato</p>
+      </div>
+      <div class="space-y-4">
+        <div class="relative">
+          <i class="fas fa-user field-icon"></i>
+          <input type="text" id="leadNome" class="pl-10" placeholder="Seu nome completo" />
+        </div>
+        <div class="relative">
+          <i class="fas fa-phone field-icon"></i>
+          <input type="text" id="leadPhone" class="pl-10" placeholder="WhatsApp com DDD" />
+        </div>
+        <div class="relative">
+          <i class="fas fa-calendar field-icon"></i>
+          <input type="date" id="leadDate" class="pl-10 text-white" style="color-scheme: dark;" min="" />
+        </div>
+        <div>
+          <label class="block text-gray-400 text-xs font-medium mb-2">Melhor horario</label>
+          <div id="timeSlots" class="flex flex-wrap gap-2"></div>
+        </div>
+      </div>
+      <div class="flex gap-3 mt-6">
+        <button onclick="enviarLead()" id="leadSubmitBtn" class="flex-1 bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-orange-500/30">
+          <i class="fab fa-whatsapp mr-2"></i> Enviar e Abrir WhatsApp
+        </button>
+        <button onclick="fecharLeadModal()" class="px-4 bg-gray-800 hover:bg-gray-700 text-gray-300 font-medium py-3 rounded-xl transition-all">Cancelar</button>
+      </div>
+      <p class="text-center text-gray-600 text-xs mt-4">Seus dados estão seguros. Usaremos apenas para contato.</p>
+    </div>
+  </div>
+
+  <header class="fixed top-0 left-0 w-full z-40 bg-[#0a0a0a]/95 backdrop-blur border-b border-gray-800">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16">
+        <a href="#" class="flex items-center gap-2 text-xl font-extrabold tracking-tight">
+          <i class="fas fa-dumbbell text-orange-500 text-2xl"></i>
+          <span class="text-white">IronFit</span>
+          <span class="text-orange-500">Andradina</span>
+        </a>
+        <nav class="hidden md:flex items-center gap-8 text-sm font-medium">
+          <a href="#hero" class="nav-link text-gray-300 hover:text-orange-400 transition-colors">Inicio</a>
+          <a href="#modalidades" class="nav-link text-gray-300 hover:text-orange-400 transition-colors">Modalidades</a>
+          <a href="#estrutura" class="nav-link text-gray-300 hover:text-orange-400 transition-colors">Estrutura</a>
+          <a href="#depoimentos" class="nav-link text-gray-300 hover:text-orange-400 transition-colors">Depoimentos</a>
+          <a href="#contato" class="nav-link text-gray-300 hover:text-orange-400 transition-colors">Contato</a>
+        </nav>
+        <a href="javascript:void(0)" onclick="capturarLead(event)"
+           class="hidden md:inline-flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white font-semibold px-5 py-2.5 rounded-lg text-sm transition-all shadow-lg shadow-orange-500/30">
+          <i class="fab fa-whatsapp"></i> Agende sua Aula Experimental
+        </a>
+        <button id="mobileMenuBtn" class="md:hidden text-gray-300 text-2xl" aria-label="Abrir menu">
+          <i class="fas fa-bars"></i>
+        </button>
+      </div>
+    </div>
+    <div id="mobileMenu" class="mobile-menu md:hidden flex-col bg-[#111] border-t border-gray-800 px-4 py-4 gap-3 text-sm">
+      <a href="#hero" class="text-gray-300 hover:text-orange-400 py-1">Inicio</a>
+      <a href="#modalidades" class="text-gray-300 hover:text-orange-400 py-1">Modalidades</a>
+      <a href="#estrutura" class="text-gray-300 hover:text-orange-400 py-1">Estrutura</a>
+      <a href="#depoimentos" class="text-gray-300 hover:text-orange-400 py-1">Depoimentos</a>
+      <a href="#contato" class="text-gray-300 hover:text-orange-400 py-1">Contato</a>
+      <a href="javascript:void(0)" onclick="capturarLead(event)"
+         class="inline-flex items-center justify-center gap-2 bg-orange-500 hover:bg-orange-600 text-white font-semibold px-4 py-2 rounded-lg text-sm mt-2">
+        <i class="fab fa-whatsapp"></i> Agende sua Aula Experimental
+      </a>
+    </div>
+  </header>
+
+  <section id="hero" class="min-h-screen flex items-center pt-16 relative overflow-hidden" style="background: url('fundo.png') center center / cover no-repeat;">
+    <div class="absolute inset-0 bg-black/70"></div>
+    <div class="absolute inset-0 backdrop-blur-[3px]"></div>
+    <div class="absolute inset-0 opacity-5">
+      <div class="absolute top-20 left-10 w-72 h-72 bg-orange-500 rounded-full blur-[120px]"></div>
+      <div class="absolute bottom-20 right-10 w-96 h-96 bg-orange-600 rounded-full blur-[150px]"></div>
+    </div>
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 relative z-10">
+      <div class="max-w-3xl">
+        <span class="inline-block bg-orange-500/10 text-orange-400 text-xs font-semibold px-4 py-1.5 rounded-full border border-orange-500/30 mb-6">
+          <i class="fas fa-map-pin mr-1"></i> Andradina-SP
+        </span>
+        <h1 class="text-4xl sm:text-5xl lg:text-6xl font-extrabold leading-tight text-white mb-6">
+          Transforme seu corpo e sua saude<br />
+          <span class="text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-yellow-400">no coracao de Andradina</span>
+        </h1>
+        <p class="text-lg sm:text-xl text-gray-400 mb-8 leading-relaxed max-w-2xl">
+          Metodologia comprovada para resultados reais. Equipamentos modernos, ambiente climatizado
+          e profissionais qualificados prontos para te acompanhar do inicio ao fim.
+        </p>
+        <div class="flex flex-col sm:flex-row gap-4">
+          <a href="javascript:void(0)" onclick="capturarLead(event)"
+             class="inline-flex items-center justify-center gap-3 bg-orange-500 hover:bg-orange-600 text-white font-bold px-8 py-4 rounded-xl text-lg transition-all shadow-xl shadow-orange-500/30 hover:shadow-orange-500/50">
+            <i class="fab fa-whatsapp text-xl"></i> Agende sua Aula Experimental
+          </a>
+          <a href="#modalidades"
+            class="inline-flex items-center justify-center gap-2 border border-gray-600 hover:border-orange-400 text-gray-300 hover:text-orange-400 font-medium px-8 py-4 rounded-xl text-lg transition-all">
+            Ver Modalidades <i class="fas fa-arrow-down text-sm"></i>
+          </a>
+        </div>
+        <div class="flex flex-wrap gap-6 mt-12 text-sm text-gray-500">
+          <span><i class="fas fa-check-circle text-orange-500 mr-1"></i> 12+ anos de experiencia</span>
+          <span><i class="fas fa-check-circle text-orange-500 mr-1"></i> +1.200 alunos ativos</span>
+          <span><i class="fas fa-check-circle text-orange-500 mr-1"></i> Nota 4.9 no Google</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="modalidades" class="py-20 bg-[#0f0f0f]">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center mb-14">
+        <span class="text-orange-500 font-semibold text-sm tracking-widest uppercase">Nossas Modalidades</span>
+        <h2 class="text-3xl sm:text-4xl font-bold text-white mt-2">Escolha o treino ideal para voce</h2>
+        <p class="text-gray-400 mt-3 max-w-xl mx-auto">Do classico ao moderno, temos a modalidade certa para seu objetivo.</p>
+      </div>
+      <div class="grid md:grid-cols-3 gap-8">
+        <div class="card-hover bg-[#1a1a1a] border border-gray-800 rounded-2xl p-8 text-center">
+          <div class="w-16 h-16 mx-auto mb-5 bg-orange-500/10 rounded-full flex items-center justify-center text-orange-500 text-3xl">
+            <i class="fas fa-dumbbell"></i>
+          </div>
+          <h3 class="text-xl font-bold text-white mb-3">Musculacao e Hipertrofia</h3>
+          <p class="text-gray-400 text-sm leading-relaxed mb-5">Equipamentos modernos e acompanhamento profissional para ganho de massa muscular, definicao e forca.</p>
+          <ul class="text-xs text-gray-500 space-y-1.5">
+            <li><i class="fas fa-check text-orange-500 mr-1.5"></i> Anilhas olimpicas</li>
+            <li><i class="fas fa-check text-orange-500 mr-1.5"></i> Maquinas articuladas</li>
+            <li><i class="fas fa-check text-orange-500 mr-1.5"></i> Treino personalizado</li>
+          </ul>
+        </div>
+        <div class="card-hover bg-[#1a1a1a] border border-gray-800 rounded-2xl p-8 text-center">
+          <div class="w-16 h-16 mx-auto mb-5 bg-orange-500/10 rounded-full flex items-center justify-center text-orange-500 text-3xl">
+            <i class="fas fa-fire"></i>
+          </div>
+          <h3 class="text-xl font-bold text-white mb-3">Treinamento HIIT</h3>
+          <p class="text-gray-400 text-sm leading-relaxed mb-5">Queima de gordura rapida com treinos intervalados de alta intensidade. Resultados visiveis em poucas semanas.</p>
+          <ul class="text-xs text-gray-500 space-y-1.5">
+            <li><i class="fas fa-check text-orange-500 mr-1.5"></i> Queima calorica acelerada</li>
+            <li><i class="fas fa-check text-orange-500 mr-1.5"></i> Treinos de 30 min</li>
+            <li><i class="fas fa-check text-orange-500 mr-1.5"></i> Metabolismo elevado</li>
+          </ul>
+        </div>
+        <div class="card-hover bg-[#1a1a1a] border border-gray-800 rounded-2xl p-8 text-center">
+          <div class="w-16 h-16 mx-auto mb-5 bg-orange-500/10 rounded-full flex items-center justify-center text-orange-500 text-3xl">
+            <i class="fas fa-users"></i>
+          </div>
+          <h3 class="text-xl font-bold text-white mb-3">Aulas Coletivas</h3>
+          <p class="text-gray-400 text-sm leading-relaxed mb-5">Jump, Spinning, Ginastica Localizada e muito mais. Energia coletiva que motiva e transforma.</p>
+          <ul class="text-xs text-gray-500 space-y-1.5">
+            <li><i class="fas fa-check text-orange-500 mr-1.5"></i> Jump</li>
+            <li><i class="fas fa-check text-orange-500 mr-1.5"></i> Spinning</li>
+            <li><i class="fas fa-check text-orange-500 mr-1.5"></i> Localizada + Alongamento</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="estrutura" class="py-20 bg-[#0a0a0a]">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center mb-14">
+        <span class="text-orange-500 font-semibold text-sm tracking-widest uppercase">Nossa Estrutura</span>
+        <h2 class="text-3xl sm:text-4xl font-bold text-white mt-2">Diferenciais que fazem a diferenca</h2>
+      </div>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
+        <div class="bg-[#1a1a1a] border border-gray-800 rounded-xl p-6 text-center card-hover">
+          <i class="fas fa-graduation-cap text-orange-500 text-3xl mb-3"></i>
+          <h3 class="text-white font-bold text-sm mb-1">Prof. Qualificados</h3>
+          <p class="text-gray-500 text-xs">Educacao fisica especializada e acompanhamento individual</p>
+        </div>
+        <div class="bg-[#1a1a1a] border border-gray-800 rounded-xl p-6 text-center card-hover">
+          <i class="fas fa-snowflake text-orange-500 text-3xl mb-3"></i>
+          <h3 class="text-white font-bold text-sm mb-1">Ambiente Climatizado</h3>
+          <p class="text-gray-500 text-xs">Conforto termico em todos os ambientes da academia</p>
+        </div>
+        <div class="bg-[#1a1a1a] border border-gray-800 rounded-xl p-6 text-center card-hover">
+          <i class="fas fa-cogs text-orange-500 text-3xl mb-3"></i>
+          <h3 class="text-white font-bold text-sm mb-1">Equipamentos de Ponta</h3>
+          <p class="text-gray-500 text-xs">Maquinas modernas e manutencao preventiva constante</p>
+        </div>
+        <div class="bg-[#1a1a1a] border border-gray-800 rounded-xl p-6 text-center card-hover">
+          <i class="fas fa-heartbeat text-orange-500 text-3xl mb-3"></i>
+          <h3 class="text-white font-bold text-sm mb-1">Acompanhamento Personalizado</h3>
+          <p class="text-gray-500 text-xs">Plano de treino sob medida para seu objetivo</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="depoimentos" class="py-20 bg-[#0f0f0f]">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center mb-14">
+        <span class="text-orange-500 font-semibold text-sm tracking-widest uppercase">Depoimentos</span>
+        <h2 class="text-3xl sm:text-4xl font-bold text-white mt-2">Quem treina aqui recomenda</h2>
+      </div>
+      <div class="grid md:grid-cols-3 gap-8">
+        <div class="bg-[#1a1a1a] border border-gray-800 rounded-2xl p-6 card-hover">
+          <div class="flex items-center gap-1 text-yellow-400 text-sm mb-3">
+            <i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i>
+          </div>
+          <p class="text-gray-300 text-sm leading-relaxed mb-4">"Melhor academia de Andradina! Em 3 meses ja vi resultados incriveis. Os professores sao muito atenciosos."</p>
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-full bg-orange-500/20 flex items-center justify-center text-orange-500 font-bold text-sm">CL</div>
+            <div><strong class="text-white text-sm">Carlos Lima</strong><span class="text-gray-500 text-xs block">Aluno ha 8 meses</span></div>
+          </div>
+        </div>
+        <div class="bg-[#1a1a1a] border border-gray-800 rounded-2xl p-6 card-hover">
+          <div class="flex items-center gap-1 text-yellow-400 text-sm mb-3">
+            <i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i>
+          </div>
+          <p class="text-gray-300 text-sm leading-relaxed mb-4">"As aulas de Jump e Spinning sao demais! Ambiente climatizado e equipamentos novos fazem toda diferenca."</p>
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-full bg-orange-500/20 flex items-center justify-center text-orange-500 font-bold text-sm">AM</div>
+            <div><strong class="text-white text-sm">Ana Martins</strong><span class="text-gray-500 text-xs block">Aluna ha 1 ano</span></div>
+          </div>
+        </div>
+        <div class="bg-[#1a1a1a] border border-gray-800 rounded-2xl p-6 card-hover">
+          <div class="flex items-center gap-1 text-yellow-400 text-sm mb-3">
+            <i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i>
+          </div>
+          <p class="text-gray-300 text-sm leading-relaxed mb-4">"Treino ha 5 anos e nunca vi acompanhamento tao personalizado. O HIIT mudou meu condicionamento fisico!"</p>
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-full bg-orange-500/20 flex items-center justify-center text-orange-500 font-bold text-sm">RF</div>
+            <div><strong class="text-white text-sm">Rafael Fernandes</strong><span class="text-gray-500 text-xs block">Aluno ha 2 anos</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="calculadora" class="py-20 bg-[#0a0a0a]">
+    <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center mb-12">
+        <span class="text-orange-500 font-semibold text-sm tracking-widest uppercase">Ferramenta Interativa</span>
+        <h2 class="text-3xl sm:text-4xl font-bold text-white mt-2">Calculadora de IMC</h2>
+        <p class="text-gray-400 mt-3">Descubra seu Indice de Massa Corporal e receba uma recomendacao de treino.</p>
+      </div>
+      <div class="bg-[#161616] border border-gray-800 rounded-2xl p-8 sm:p-10">
+        <div class="grid sm:grid-cols-2 gap-6 mb-6">
+          <div>
+            <label class="block text-gray-400 text-sm font-medium mb-2">Altura (cm)</label>
+            <input type="number" id="altura" value="175" min="100" max="250" class="input-calc" />
+          </div>
+          <div>
+            <label class="block text-gray-400 text-sm font-medium mb-2">Peso (kg)</label>
+            <input type="number" id="peso" value="80" min="30" max="250" class="input-calc" />
+          </div>
+        </div>
+        <div class="mb-8">
+          <label class="block text-gray-400 text-sm font-medium mb-2">Idade: <span id="idadeDisplay" class="text-white font-bold">30</span> anos</label>
+          <input type="range" id="idade" min="12" max="80" value="30" class="w-full" />
+        </div>
+        <button onclick="calcularIMC()" class="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-3.5 rounded-xl text-lg transition-all shadow-lg shadow-orange-500/30">
+          <i class="fas fa-calculator mr-2"></i> Calcular IMC
+        </button>
+        <div id="resultadoIMC" class="mt-6 hidden">
+          <div class="bg-[#1f2937] rounded-xl p-5 text-center">
+            <p class="text-gray-400 text-sm">Seu IMC e</p>
+            <p id="imcValor" class="text-4xl font-extrabold text-white mt-1"></p>
+            <p id="imcClassificacao" class="text-orange-400 font-semibold mt-1"></p>
+            <p id="imcRecomendacao" class="text-gray-400 text-sm mt-3"></p>
+          </div>
+          <button onclick="capturarLead(event)" id="btnImcCta" class="w-full mt-4 bg-gradient-to-r from-orange-500 to-yellow-500 hover:from-orange-600 hover:to-yellow-600 text-white font-bold py-3.5 rounded-xl text-lg transition-all shadow-lg shadow-orange-500/30 hidden items-center justify-center gap-2">
+            <i class="fab fa-whatsapp"></i> Quero minha Aula Experimental
+          </button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="py-16 bg-[#0f0f0f]">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center mb-10">
+        <span class="text-orange-500 font-semibold text-sm tracking-widest uppercase">Onde Estamos</span>
+        <h2 class="text-3xl sm:text-4xl font-bold text-white mt-2">Venha nos conhecer</h2>
+      </div>
+      <div class="rounded-2xl overflow-hidden border border-gray-800 shadow-xl">
+        <iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d237849.04191861405!2d-51.38965369327448!3d-20.898933685717724!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x949a3ff3966bb5a7%3A0xc3c3282dc8675713!2sAndradina%2C%20SP!5e0!3m2!1spt-BR!2sbr!4v1744416000000!5m2!1spt-BR!2sbr" width="100%" height="380" style="border:0;" allowfullscreen="" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+      </div>
+    </div>
+  </section>
+
+  <footer id="contato" class="bg-[#0a0a0a] border-t border-gray-800 pt-16 pb-8">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="grid md:grid-cols-4 gap-10 mb-12">
+        <div>
+          <div class="flex items-center gap-2 text-lg font-extrabold tracking-tight mb-4">
+            <i class="fas fa-dumbbell text-orange-500"></i>
+            <span class="text-white">IronFit</span>
+            <span class="text-orange-500">Andradina</span>
+          </div>
+          <p class="text-gray-500 text-sm leading-relaxed">Sua academia de referencia em Andradina-SP. Transformando vidas atraves do movimento.</p>
+          <div class="flex gap-3 mt-5">
+            <a href="#" class="w-9 h-9 rounded-full bg-gray-800 hover:bg-orange-500 flex items-center justify-center text-gray-400 hover:text-white transition-all" aria-label="Instagram"><i class="fab fa-instagram"></i></a>
+            <a href="#" class="w-9 h-9 rounded-full bg-gray-800 hover:bg-orange-500 flex items-center justify-center text-gray-400 hover:text-white transition-all" aria-label="Facebook"><i class="fab fa-facebook-f"></i></a>
+            <a href="#" class="w-9 h-9 rounded-full bg-gray-800 hover:bg-orange-500 flex items-center justify-center text-gray-400 hover:text-white transition-all" aria-label="YouTube"><i class="fab fa-youtube"></i></a>
+            <a href="#" class="w-9 h-9 rounded-full bg-gray-800 hover:bg-orange-500 flex items-center justify-center text-gray-400 hover:text-white transition-all" aria-label="TikTok"><i class="fab fa-tiktok"></i></a>
+          </div>
+        </div>
+        <div>
+          <h4 class="text-white font-bold mb-4">Modalidades</h4>
+          <ul class="text-gray-500 text-sm space-y-2.5">
+            <li><a href="#modalidades" class="hover:text-orange-400 transition-colors">Musculacao</a></li>
+            <li><a href="#modalidades" class="hover:text-orange-400 transition-colors">HIIT</a></li>
+            <li><a href="#modalidades" class="hover:text-orange-400 transition-colors">Jump</a></li>
+            <li><a href="#modalidades" class="hover:text-orange-400 transition-colors">Spinning</a></li>
+            <li><a href="#modalidades" class="hover:text-orange-400 transition-colors">Localizada</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4 class="text-white font-bold mb-4">Horarios</h4>
+          <ul class="text-gray-500 text-sm space-y-2.5">
+            <li><span class="text-gray-400">Seg a Sex:</span> 06h - 22h</li>
+            <li><span class="text-gray-400">Sabado:</span> 08h - 14h</li>
+            <li><span class="text-gray-400">Domingo:</span> Fechado</li>
+            <li class="pt-2 text-xs text-gray-600">* Feriados com horario especial</li>
+          </ul>
+        </div>
+        <div>
+          <h4 class="text-white font-bold mb-4">Endereco</h4>
+          <address class="text-gray-500 text-sm not-italic leading-relaxed">
+            <i class="fas fa-map-marker-alt text-orange-500 mr-1"></i> Rua Ademar de Barros, 456<br />
+            Centro, Andradina - SP<br />
+            CEP 16900-000
+          </address>
+          <p class="text-gray-500 text-sm mt-3"><i class="fas fa-phone text-orange-500 mr-1"></i> (18) 99999-9999</p>
+          <p class="text-gray-500 text-sm mt-1"><i class="fas fa-envelope text-orange-500 mr-1"></i> contato@ironfitandradina.com.br</p>
+        </div>
+      </div>
+      <div class="border-t border-gray-800 pt-6 text-center text-gray-600 text-xs">
+        <p>&copy; 2026 IronFit Andradina. Todos os direitos reservados.</p>
+      </div>
+    </div>
+  </footer>
+
+  <button id="chatBtn" class="chat-btn" aria-label="Abrir chat">
+    <i class="fas fa-comment-dots"></i>
+  </button>
+
+  <div id="chatBox" class="chat-box">
+    <div class="chat-header">
+      <h3><i class="fas fa-robot mr-2"></i> Atendente IronFit</h3>
+      <button id="chatClose" aria-label="Fechar chat"><i class="fas fa-times"></i></button>
+    </div>
+    <div id="chatMessages" class="chat-messages"></div>
+    <div id="chatSuggestions" class="chat-suggestions"></div>
+    <div class="chat-input-area">
+      <input type="text" id="chatInput" placeholder="Digite sua pergunta..." />
+      <button id="chatSend" aria-label="Enviar"><i class="fas fa-paper-plane"></i></button>
+    </div>
+  </div>
+
+  <a href="javascript:void(0)" onclick="capturarLead(event)" class="whatsapp-float" aria-label="Fale conosco pelo WhatsApp">
+    <i class="fab fa-whatsapp"></i>
+  </a>
+
+  <script>
+    var selectedTime = '';
+    var timeSlots = ['06:00','07:00','08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00','21:00'];
+    function renderTimeSlots() {
+      var container = document.getElementById('timeSlots');
+      if (!container) return;
+      container.innerHTML = '';
+      timeSlots.forEach(function(t) {
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.textContent = t;
+        btn.className = 'px-3 py-1.5 rounded-lg text-xs font-medium border transition-all';
+        btn.className += selectedTime === t ? ' bg-orange-500 text-white border-orange-500' : ' bg-[#1f2937] text-gray-300 border-gray-600 hover:border-orange-400 hover:text-orange-400';
+        btn.onclick = function() { selectedTime = t; renderTimeSlots(); };
+        container.appendChild(btn);
+      });
+    }
+    function capturarLead(e) {
+      e.preventDefault();
+      var today = new Date().toISOString().split('T')[0];
+      document.getElementById('leadDate').setAttribute('min', today);
+      renderTimeSlots();
+      document.getElementById('leadModal').classList.add('open');
+    }
+    function fecharLeadModal() { document.getElementById('leadModal').classList.remove('open'); }
+
+    const menuBtn = document.getElementById('mobileMenuBtn');
+    const mobileMenu = document.getElementById('mobileMenu');
+    menuBtn.addEventListener('click', () => {
+      mobileMenu.classList.toggle('open');
+      const icon = menuBtn.querySelector('i');
+      icon.classList.toggle('fa-bars');
+      icon.classList.toggle('fa-times');
+    });
+    mobileMenu.querySelectorAll('a').forEach(link => {
+      link.addEventListener('click', () => {
+        mobileMenu.classList.remove('open');
+        menuBtn.querySelector('i').className = 'fas fa-bars';
+      });
+    });
+
+    const idadeSlider = document.getElementById('idade');
+    const idadeDisplay = document.getElementById('idadeDisplay');
+    idadeSlider.addEventListener('input', () => { idadeDisplay.textContent = idadeSlider.value; });
+
+    function calcularIMC() {
+      const altura = parseFloat(document.getElementById('altura').value) / 100;
+      const peso = parseFloat(document.getElementById('peso').value);
+      const idade = parseInt(document.getElementById('idade').value);
+      if (!altura || !peso || altura <= 0 || peso <= 0) { alert('Preencha altura e peso com valores validos.'); return; }
+      const imc = peso / (altura * altura);
+      const imcArredondado = imc.toFixed(1);
+      let classificacao, recomendacao;
+      if (imc < 18.5) { classificacao = 'Abaixo do peso'; recomendacao = 'Recomendamos nosso plano de hipertrofia com acompanhamento nutricional.'; }
+      else if (imc < 25) { classificacao = 'Peso normal'; recomendacao = 'Continue assim! Mantenha os resultados com treinos equilibrados.'; }
+      else if (imc < 30) { classificacao = 'Sobrepeso'; recomendacao = 'Que tal experimentar nosso HIIT para queima de gordura acelerada?'; }
+      else if (imc < 35) { classificacao = 'Obesidade Grau I'; recomendacao = 'Nossos profissionais podem montar um plano especial para voce. Agende uma avaliacao!'; }
+      else if (imc < 40) { classificacao = 'Obesidade Grau II'; recomendacao = 'Busque orientacao medica e conheca nosso programa de recondicionamento fisico.'; }
+      else { classificacao = 'Obesidade Grau III'; recomendacao = 'Procure acompanhamento medico. Estamos prontos para te ajudar na sua jornada.'; }
+      document.getElementById('imcValor').textContent = imcArredondado;
+      document.getElementById('imcClassificacao').textContent = classificacao;
+      document.getElementById('imcRecomendacao').textContent = recomendacao;
+      document.getElementById('btnImcCta').classList.remove('hidden');
+      document.getElementById('btnImcCta').classList.add('flex');
+      const el = document.getElementById('resultadoIMC');
+      el.classList.remove('hidden');
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    document.querySelectorAll('.input-calc').forEach(inp => {
+      inp.addEventListener('keydown', e => { if (e.key === 'Enter') calcularIMC(); });
+    });
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBbLnFQJjI_wMu-RxoOdmT705pAxzmdHsY",
+      authDomain: "ironfit-fa160.firebaseapp.com",
+      projectId: "ironfit-fa160",
+      storageBucket: "ironfit-fa160.firebasestorage.app",
+      messagingSenderId: "946273885009",
+      appId: "1:946273885009:web:eb8cedfdae013540ac9170",
+      measurementId: "G-V2GDS3W6H9"
+    };
+    let firestore = null;
+    try { firebase.initializeApp(firebaseConfig); firestore = firebase.firestore(); } catch (e) { console.warn('Firebase nao configurado.', e); }
+
+    const localReplies = [
+      { keywords: ['quanto custa', 'preco', 'mensalidade', 'valor', 'plano', 'assinatura', 'caro', 'barato'], reply: 'Temos planos a partir de <strong>R$ 89,90/mes</strong>. A primeira aula experimental e gratuita! 🎯' },
+      { keywords: ['horario', 'funcionamento', 'abre', 'fecha', 'aberto', 'horas'], reply: 'Funcionamos <strong>Seg a Sex</strong> 06h-22h e <strong>Sab</strong> 08h-14h.' },
+      { keywords: ['primeira aula', 'aula experimental', 'experimental', 'gratis', 'teste', 'experimentar'], reply: 'Sim! Sua <strong>primeira aula e gratuita</strong>! 🎉 Quer deixar seu contato para agendarmos?' },
+      { keywords: ['onde fica', 'endereco', 'local', 'fica', 'como chegar', 'andradina', 'localizacao'], reply: 'Estamos na <strong>Rua Ademar de Barros, 456</strong>, Centro, Andradina-SP. 📍' },
+      { keywords: ['modalidade', 'aula', 'treino', 'musculacao', 'hipertrofia', 'hiit', 'jump', 'spinning', 'localizada'], reply: 'Temos: 🏋️ <strong>Musculacao</strong> | 🔥 <strong>HIIT</strong> | 👥 <strong>Jump, Spinning, Localizada</strong>' },
+      { keywords: ['contato', 'telefone', 'whatsapp', 'falar', 'fale', 'ligar', 'zap'], reply: '📱 WhatsApp: (18) 99999-9999 | 📧 contato@ironfitandradina.com.br' },
+      { keywords: ['personal', 'personal trainer', 'acompanhamento', 'professor', 'instrutor'], reply: 'Todos os professores sao formados em <strong>Educacao Fisica</strong>. Tambem oferecemos Personal Trainer avulso. 💪' },
+      { keywords: ['climatizado', 'climatizacao', 'ar condicionado', 'ventilacao', 'frio', 'calor'], reply: 'Academia <strong>totalmente climatizada</strong> com ar-condicionado! ❄️' },
+      { keywords: ['estacionamento', 'estacionar', 'parar', 'vaga', 'carro', 'moto'], reply: 'Temos <strong>estacionamento gratuito</strong> para alunos. 🚗' },
+      { keywords: ['idade', 'menor', 'maior', 'adolescente', 'crianca', 'jovem'], reply: 'Aceitamos alunos a partir de <strong>14 anos</strong>. Menores de 18 precisam de autorizacao. 📋' },
+      { keywords: ['matricula', 'inscricao', 'cadastro', 'quero me inscrever'], reply: 'Otim! Para fazer sua matricula, qual seu <strong>nome completo</strong>?' },
+    ];
+
+    function matchLocalReply(text) {
+      const lower = text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      for (const item of localReplies) {
+        for (const kw of item.keywords) {
+          if (lower.includes(kw)) return item.reply;
+        }
+      }
+      return null;
+    }
+
+    function detectLeadIntent(text) {
+      const lower = text.toLowerCase();
+      const triggers = ['aula experimental', 'agendar', 'quero me inscrever', 'matricula', 'quero treinar', 'quero comecar', 'quero experimentar', 'quero fazer', 'primeira aula', 'aula gratis', 'experimentar', 'quero agendar'];
+      return triggers.some(t => lower.includes(t));
+    }
+
+    let leadData = {};
+    function askForName() { addMessage('Que legal! Qual seu <strong>nome completo</strong>? 😊', 'bot'); window._chatPhase = 'awaiting_name'; }
+    function askForPhone() { addMessage('E qual seu <strong>WhatsApp / telefone</strong>? 📱', 'bot'); window._chatPhase = 'awaiting_phone'; }
+
+    function saveLeadToFirestore(name, phone) {
+      if (!firestore) { addMessage('Sistema temporariamente indisponivel. Chame no WhatsApp!', 'bot'); showSuggestions(); return; }
+      firestore.collection('leads').add({ nome: name, telefone: phone, origem: 'Chat IronFit', stage: 'novo', timestamp: firebase.firestore.FieldValue.serverTimestamp() })
+        .then(() => { addMessage('✅ Pronto! Nossa equipe entrara em contato em breve! 💪', 'bot'); leadData = {}; window._chatPhase = null; showSuggestions(); })
+        .catch(() => { addMessage('Erro ao salvar. Chame no WhatsApp!', 'bot'); showSuggestions(); });
+    }
+
+    function enviarLead() {
+      const nome = document.getElementById('leadNome').value.trim();
+      const phone = document.getElementById('leadPhone').value.trim();
+      const data = document.getElementById('leadDate').value;
+      if (!nome) { alert('Informe seu nome.'); return; }
+      if (!phone) { alert('Informe seu WhatsApp.'); return; }
+      const btn = document.getElementById('leadSubmitBtn');
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Salvando...';
+      var leadData = { nome, telefone: phone, origem: 'Site - Agende Aula', stage: data ? 'agendamento' : 'novo', timestamp: firebase.firestore.FieldValue.serverTimestamp() };
+      if (data) leadData.data_preferida = data;
+      if (selectedTime) leadData.horario_preferido = selectedTime;
+      const salvar = firestore ? firestore.collection('leads').add(leadData) : Promise.resolve();
+      salvar.then(() => {
+        fecharLeadModal(); btn.disabled = false; btn.innerHTML = '<i class="fab fa-whatsapp mr-2"></i> Enviar e Abrir WhatsApp';
+        document.getElementById('leadNome').value = ''; document.getElementById('leadPhone').value = ''; document.getElementById('leadDate').value = ''; selectedTime = '';
+        var msg = 'Ola! Gostaria de agendar minha aula experimental na IronFit Andradina.';
+        if (nome) msg = 'Ola, sou ' + nome + '. Gostaria de agendar minha aula experimental na IronFit Andradina.';
+        if (data) msg += ' Prefiro o dia ' + data.split('-').reverse().join('/');
+        if (selectedTime) msg += ' as ' + selectedTime + 'h';
+        msg += '.';
+        window.open('https://wa.me/5518999999999?text=' + encodeURIComponent(msg), '_blank');
+      }).catch(() => { btn.disabled = false; btn.innerHTML = '<i class="fab fa-whatsapp mr-2"></i> Enviar e Abrir WhatsApp'; alert('Erro ao salvar.'); });
+    }
+
+    document.getElementById('leadModal').addEventListener('click', function(e) { if (e.target === this) fecharLeadModal(); });
+
+    async function getAIReply(text) {
+      try {
+        const resp = await fetch('https://ironfit-ia-chat.maranief.workers.dev', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: text }) });
+        if (!resp.ok) throw new Error('Worker retornou ' + resp.status);
+        const data = await resp.json();
+        return data.reply || data.response || data.message || 'Recebi sua mensagem!';
+      } catch (e) { console.error('Erro no Worker:', e); return 'Nao consegui me conectar agora. 😅 Fale conosco pelo WhatsApp!'; }
+    }
+
+    const suggestions = ['Quanto custa?', 'Horarios de funcionamento', 'Primeira aula gratis?', 'Onde fica?', 'Quais modalidades?'];
+
+    function addMessage(html, type) {
+      const div = document.createElement('div'); div.className = 'msg-' + type; div.innerHTML = html;
+      document.getElementById('chatMessages').appendChild(div);
+      document.getElementById('chatMessages').scrollTop = document.getElementById('chatMessages').scrollHeight;
+    }
+
+    function showSuggestions() {
+      const container = document.getElementById('chatSuggestions'); container.innerHTML = '';
+      suggestions.forEach(s => { const btn = document.createElement('button'); btn.textContent = s; btn.addEventListener('click', () => handleUserMsg(s)); container.appendChild(btn); });
+    }
+
+    function handleUserMsg(text) {
+      if (!text.trim()) return;
+      addMessage(text, 'user');
+      document.getElementById('chatInput').value = '';
+      const phase = window._chatPhase;
+      if (phase === 'awaiting_name') { leadData.nome = text.trim(); askForPhone(); return; }
+      if (phase === 'awaiting_phone') { leadData.telefone = text.trim(); addMessage('Salvando...', 'bot'); saveLeadToFirestore(leadData.nome, leadData.telefone); return; }
+      const localReply = matchLocalReply(text);
+      if (localReply) {
+        setTimeout(() => {
+          addMessage(localReply, 'bot');
+          if (detectLeadIntent(text) || text.includes('experimental') || text.includes('gratis') || text.includes('primeira aula')) { askForName(); }
+          else { showSuggestions(); }
+        }, 300);
+        return;
+      }
+      addMessage('🤖 Deixa eu consultar...', 'bot');
+      getAIReply(text).then(reply => {
+        const msgs = document.querySelectorAll('.msg-bot');
+        if (msgs.length && msgs[msgs.length - 1].textContent.includes('consultar')) msgs[msgs.length - 1].remove();
+        addMessage(reply, 'bot');
+        if (detectLeadIntent(text) || detectLeadIntent(reply)) askForName(); else showSuggestions();
+      });
+    }
+
+    const chatBtn = document.getElementById('chatBtn');
+    const chatBox = document.getElementById('chatBox');
+    const chatClose = document.getElementById('chatClose');
+    const chatSend = document.getElementById('chatSend');
+    const chatInput = document.getElementById('chatInput');
+
+    chatBtn.addEventListener('click', () => {
+      chatBox.classList.toggle('open');
+      if (chatBox.classList.contains('open') && document.getElementById('chatMessages').children.length === 0) {
+        addMessage('Ola! 👋 Sou o <strong>assistente virtual</strong> da IronFit Andradina. Tire suas duvidas ou deixe seu contato!', 'bot');
+        showSuggestions();
+      }
+    });
+    chatClose.addEventListener('click', () => chatBox.classList.remove('open'));
+    chatSend.addEventListener('click', () => handleUserMsg(chatInput.value));
+    chatInput.addEventListener('keydown', e => { if (e.key === 'Enter') handleUserMsg(chatInput.value); });
+    document.addEventListener('click', e => {
+      if (chatBox.classList.contains('open') && !chatBox.contains(e.target) && e.target !== chatBtn && !chatBtn.contains(e.target)) chatBox.classList.remove('open');
+    });
+  </script>
+</body>
+</html>

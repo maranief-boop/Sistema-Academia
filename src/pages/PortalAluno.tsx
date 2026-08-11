@@ -14,7 +14,10 @@ import {
   Loader2,
   LogOut,
   Phone,
-  User
+  PlayCircle,
+  User,
+  HeartPulse,
+  CalendarDays
 } from 'lucide-react'
 
 type Aluno = {
@@ -28,11 +31,21 @@ type Aluno = {
   created_at?: string
 }
 
+type Exercicio = {
+  nome: string
+  series: number
+  repeticoes: string
+  carga?: string
+  url_video?: string
+}
+
 type Treino = {
   id: string
   aluno_id: string
   dia_semana: string
-  exercicios_json: { nome: string; series: number; repeticoes: string; carga?: string }[]
+  dias_semana?: string | null
+  restricoes?: string | null
+  exercicios_json: Exercicio[]
 }
 
 type Sessao = {
@@ -150,27 +163,44 @@ export default function PortalAluno() {
   const verificarCheckinHoje = useCallback(async () => {
     if (!aluno) return
     setVerificandoCheckin(true)
-    const inicio = new Date()
-    inicio.setHours(0, 0, 0, 0)
-    const { data, error } = await supabase
-      .from('checkins')
-      .select('id')
-      .eq('aluno_id', aluno.id)
-      .gte('data_hora', inicio.toISOString())
-    if (!error && data && data.length > 0) setJaCheckinHoje(true)
-    setVerificandoCheckin(false)
+    try {
+      const inicio = new Date()
+      inicio.setHours(0, 0, 0, 0)
+      const requisicao = supabase
+        .from('checkins')
+        .select('id')
+        .eq('aluno_id', aluno.id)
+        .gte('data_hora', inicio.toISOString())
+      // Timeout de segurança: nunca deixa a tela presa no carregamento
+      const { data, error } = await Promise.race([
+        requisicao,
+        new Promise((resolve) =>
+          setTimeout(() => resolve({ data: null, error: null }), 10000)
+        )
+      ])
+      if (!error && data && data.length > 0) setJaCheckinHoje(true)
+    } catch {
+      // Se a consulta falhar, segue sem marcar o aluno como feito
+    } finally {
+      setVerificandoCheckin(false)
+    }
   }, [aluno])
 
   const carregarFicha = useCallback(async () => {
     if (!aluno) return
     setCarregandoTreinos(true)
-    const { data, error } = await supabase
-      .from('treinos')
-      .select('*')
-      .eq('aluno_id', aluno.id)
-      .order('dia_semana')
-    if (!error) setTreinos((data as Treino[]) || [])
-    setCarregandoTreinos(false)
+    try {
+      const { data, error } = await supabase
+        .from('treinos')
+        .select('*')
+        .eq('aluno_id', aluno.id)
+        .order('dia_semana')
+      if (!error) setTreinos((data as Treino[]) || [])
+    } catch {
+      // sem ação: a seção mostra o estado vazio
+    } finally {
+      setCarregandoTreinos(false)
+    }
   }, [aluno])
 
   useEffect(() => {
@@ -329,13 +359,8 @@ export default function PortalAluno() {
             {dataHoje}
           </p>
 
-          {verificandoCheckin ? (
-            <div className="flex items-center justify-center gap-2 py-4 text-sm text-zinc-500 dark:text-zinc-400">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Verificando presença de hoje...
-            </div>
-          ) : jaCheckinHoje || checkinSucesso ? (
-            // Feedback visual de sucesso
+          {jaCheckinHoje || checkinSucesso ? (
+            // Feedback visual de sucesso + botão desabilitado (sempre visível)
             <div className="py-2">
               <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-950">
                 <CheckCircle2 className="h-7 w-7 text-emerald-600 dark:text-emerald-400" />
@@ -346,19 +371,30 @@ export default function PortalAluno() {
               <p className="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400">
                 Você já treinou hoje. Nos vemos amanhã! 💪
               </p>
+              <button
+                disabled
+                className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-zinc-200 py-4 text-base font-extrabold text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500"
+              >
+                <CheckCircle2 className="h-5 w-5" />
+                Check-in já realizado hoje
+              </button>
             </div>
           ) : (
             <button
               onClick={fazerCheckin}
-              disabled={registrando}
+              disabled={registrando || verificandoCheckin}
               className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-primary-500 to-primary-700 py-4 text-base font-extrabold text-white shadow-lg shadow-primary-600/30 transition hover:brightness-105 active:scale-[0.99] disabled:opacity-60"
             >
-              {registrando ? (
+              {registrando || verificandoCheckin ? (
                 <Loader2 className="h-5 w-5 animate-spin" />
               ) : (
                 <CalendarCheck className="h-5 w-5" />
               )}
-              {registrando ? 'Registrando...' : 'Fazer Check-in Agora'}
+              {registrando
+                ? 'Registrando...'
+                : verificandoCheckin
+                  ? 'Verificando presença...'
+                  : 'Fazer Check-in Agora'}
             </button>
           )}
         </section>
@@ -392,6 +428,36 @@ export default function PortalAluno() {
             </div>
           ) : (
             <div className="space-y-3">
+              {/* -------- Dias da semana selecionados -------- */}
+              {treinos[0]?.dias_semana && (
+                <div className="flex items-start gap-2.5 rounded-xl bg-primary-50 px-3.5 py-2.5 dark:bg-primary-950/60">
+                  <CalendarDays className="mt-0.5 h-4 w-4 shrink-0 text-primary-600 dark:text-primary-400" />
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-primary-700 dark:text-primary-300">
+                      Dias de treino
+                    </p>
+                    <p className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
+                      {treinos[0].dias_semana}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* -------- Restrições / cuidados em destaque -------- */}
+              {treinos[0]?.restricoes && (
+                <div className="flex items-start gap-2.5 rounded-xl bg-amber-50 px-3.5 py-2.5 dark:bg-amber-950/60">
+                  <HeartPulse className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
+                      Restrições / Cuidados
+                    </p>
+                    <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                      {treinos[0].restricoes}
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {treinos.map((treino) => (
                 <div
                   key={treino.id}
@@ -409,7 +475,7 @@ export default function PortalAluno() {
                     {(treino.exercicios_json || []).map((ex, i) => (
                       <li
                         key={i}
-                        className="flex items-center justify-between px-4 py-2.5"
+                        className="flex items-center justify-between gap-3 px-4 py-2.5"
                       >
                         <div className="min-w-0">
                           <p className="truncate font-semibold text-zinc-800 dark:text-zinc-100">
@@ -420,6 +486,18 @@ export default function PortalAluno() {
                             {ex.carga ? ` · ${ex.carga}` : ''}
                           </p>
                         </div>
+                        {ex.url_video && (
+                          <a
+                            href={ex.url_video}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-primary-600 px-2.5 py-1.5 text-xs font-bold text-white transition hover:bg-primary-700"
+                            title="Assistir vídeo explicativo"
+                          >
+                            <PlayCircle className="h-4 w-4" />
+                            Ver Vídeo
+                          </a>
+                        )}
                       </li>
                     ))}
                   </ul>

@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>IronFit CRM - Login</title>
+  <script src="https://cdn.tailwindcss.com">
+  </script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js">
+  </script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js">
+  </script>
+  <style>
+    body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: #0a0a0a; }
+    .login-card { animation: fadeIn .5s; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    .input-field {
+      background: #1f2937;
+      border: 1px solid #374151;
+      color: #fff;
+      padding: 12px 16px 12px 44px;
+      border-radius: 10px;
+      width: 100%;
+      outline: none;
+      font-size: 14px;
+      transition: border .2s;
+    }
+    .input-field:focus { border-color: #f97316; }
+    .input-icon { position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: #6b7280; font-size: 16px; }
+    .toggle-pwd { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); background: none; border: none; color: #6b7280; cursor: pointer; font-size: 16px; }
+    .toggle-pwd:hover { color: #9ca3af; }
+    .error-box { background: rgba(239,68,68,.1); border: 1px solid rgba(239,68,68,.3); color: #fca5a5; border-radius: 10px; padding: 10px 14px; font-size: 13px; display: none; }
+  </style>
+</head>
+<body class="min-h-screen flex items-center justify-center px-4">
+  <div class="login-card w-full max-w-md">
+    <div class="text-center mb-8">
+      <i class="fas fa-dumbbell text-orange-500 text-4xl mb-3"></i>
+      <h1 class="text-2xl font-extrabold text-white">IronFit <span class="text-orange-500">CRM</span></h1>
+      <p class="text-gray-500 text-sm mt-1">Faça login para acessar o painel</p>
+    </div>
+
+    <div id="loginBox" class="bg-[#161616] border border-gray-800 rounded-2xl p-8">
+      <div id="errorMsg" class="error-box mb-4"><i class="fas fa-exclamation-circle mr-2"></i><span id="errorText"></span></div>
+
+      <div class="mb-4 relative">
+        <i class="fas fa-envelope input-icon"></i>
+        <input type="email" id="email" class="input-field pl-11" placeholder="E-mail" autocomplete="email" />
+      </div>
+
+      <div class="mb-6 relative">
+        <i class="fas fa-lock input-icon"></i>
+        <input type="password" id="password" class="input-field pl-11" placeholder="Senha" autocomplete="current-password" />
+        <button type="button" class="toggle-pwd" onclick="togglePwd()" aria-label="Mostrar senha"><i class="fas fa-eye" id="eyeIcon"></i></button>
+      </div>
+
+      <button onclick="login()" id="loginBtn" class="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 rounded-xl text-base transition-all shadow-lg shadow-orange-500/30 mb-3">
+        <i class="fas fa-sign-in-alt mr-2"></i> Entrar
+      </button>
+
+      <p class="text-center text-gray-500 text-sm">
+        Ainda não tem acesso?
+        <button onclick="showRegister()" class="text-orange-400 hover:text-orange-300 font-medium transition-colors ml-1">Solicitar acesso</button>
+      </p>
+    </div>
+
+    <div id="registerBox" class="bg-[#161616] border border-gray-800 rounded-2xl p-8 hidden">
+      <h3 class="text-lg font-bold text-white mb-1"><i class="fas fa-user-plus text-orange-500 mr-2"></i>Criar Conta</h3>
+      <p class="text-gray-500 text-sm mb-6">Acesso reservado à equipe IronFit.</p>
+
+      <div class="mb-4 relative">
+        <i class="fas fa-user input-icon"></i>
+        <input type="text" id="regNome" class="input-field pl-11" placeholder="Nome completo" />
+      </div>
+      <div class="mb-4 relative">
+        <i class="fas fa-envelope input-icon"></i>
+        <input type="email" id="regEmail" class="input-field pl-11" placeholder="E-mail" autocomplete="email" />
+      </div>
+      <div class="mb-6 relative">
+        <i class="fas fa-lock input-icon"></i>
+        <input type="password" id="regPassword" class="input-field pl-11" placeholder="Senha (mín. 6 caracteres)" autocomplete="new-password" />
+      </div>
+
+      <button onclick="register()" id="regBtn" class="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 rounded-xl text-base transition-all shadow-lg shadow-orange-500/30 mb-3">
+        <i class="fas fa-check mr-2"></i> Criar Conta
+      </button>
+
+      <p class="text-center text-gray-500 text-sm">
+        Já tem conta?
+        <button onclick="showLogin()" class="text-orange-400 hover:text-orange-300 font-medium transition-colors ml-1">Fazer login</button>
+      </p>
+    </div>
+
+    <p class="text-center text-gray-600 text-xs mt-6">
+      <a href="index.html" class="hover:text-orange-400 transition-colors"><i class="fas fa-arrow-left mr-1"></i> Voltar ao site</a>
+    </p>
+  </div>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyBbLnFQJjI_wMu-RxoOdmT705pAxzmdHsY",
+      authDomain: "ironfit-fa160.firebaseapp.com",
+      projectId: "ironfit-fa160",
+      storageBucket: "ironfit-fa160.firebasestorage.app",
+      messagingSenderId: "946273885009",
+      appId: "1:946273885009:web:eb8cedfdae013540ac9170",
+      measurementId: "G-V2GDS3W6H9"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+
+    auth.onAuthStateChanged(user => {
+      if (user) window.location.href = 'dashboard.html';
+    });
+
+    function showError(msg) {
+      document.getElementById('errorText').textContent = msg;
+      document.getElementById('errorMsg').style.display = 'block';
+    }
+
+    function hideError() {
+      document.getElementById('errorMsg').style.display = 'none';
+    }
+
+    function togglePwd() {
+      const pwd = document.getElementById('password');
+      const icon = document.getElementById('eyeIcon');
+      if (pwd.type === 'password') { pwd.type = 'text'; icon.className = 'fas fa-eye-slash'; }
+      else { pwd.type = 'password'; icon.className = 'fas fa-eye'; }
+    }
+
+    function login() {
+      hideError();
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+      if (!email || !password) return showError('Preencha e-mail e senha.');
+      document.getElementById('loginBtn').disabled = true;
+      document.getElementById('loginBtn').innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Entrando...';
+      auth.signInWithEmailAndPassword(email, password)
+        .then(() => window.location.href = 'dashboard.html')
+        .catch(err => {
+          document.getElementById('loginBtn').disabled = false;
+          document.getElementById('loginBtn').innerHTML = '<i class="fas fa-sign-in-alt mr-2"></i> Entrar';
+          if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
+            showError('E-mail ou senha inválidos.');
+          } else if (err.code === 'auth/invalid-email') {
+            showError('Formato de e-mail inválido.');
+          } else if (err.code === 'auth/too-many-requests') {
+            showError('Muitas tentativas. Aguarde e tente novamente.');
+          } else {
+            showError(err.message);
+          }
+        });
+    }
+
+    function showRegister() {
+      hideError();
+      document.getElementById('loginBox').classList.add('hidden');
+      document.getElementById('registerBox').classList.remove('hidden');
+    }
+
+    function showLogin() {
+      hideError();
+      document.getElementById('registerBox').classList.add('hidden');
+      document.getElementById('loginBox').classList.remove('hidden');
+    }
+
+    function register() {
+      hideError();
+      const nome = document.getElementById('regNome').value.trim();
+      const email = document.getElementById('regEmail').value.trim();
+      const password = document.getElementById('regPassword').value;
+      if (!nome) return showError('Informe seu nome.');
+      if (!email) return showError('Informe seu e-mail.');
+      if (password.length < 6) return showError('A senha deve ter no mínimo 6 caracteres.');
+      document.getElementById('regBtn').disabled = true;
+      document.getElementById('regBtn').innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Criando...';
+      auth.createUserWithEmailAndPassword(email, password)
+        .then(result => result.user.updateProfile({ displayName: nome }))
+        .then(() => window.location.href = 'dashboard.html')
+        .catch(err => {
+          document.getElementById('regBtn').disabled = false;
+          document.getElementById('regBtn').innerHTML = '<i class="fas fa-check mr-2"></i> Criar Conta';
+          if (err.code === 'auth/email-already-in-use') {
+            showError('Este e-mail já está cadastrado. Faça login.');
+          } else {
+            showError(err.message);
+          }
+        });
+    }
+
+    document.getElementById('email').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
+    document.getElementById('password').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
+    document.getElementById('regNome').addEventListener('keydown', e => { if (e.key === 'Enter') register(); });
+    document.getElementById('regEmail').addEventListener('keydown', e => { if (e.key === 'Enter') register(); });
+    document.getElementById('regPassword').addEventListener('keydown', e => { if (e.key === 'Enter') register(); });
+  </script>
+</body>
+</html>

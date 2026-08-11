@@ -1,10 +1,22 @@
 // =====================================================================
 // Módulo de Treinos — ficha por aluno dividida por dias (A, B, C, D)
-// Exercícios: nome, séries, repetições e carga (persistidos no Supabase)
+// Exercícios: nome (com busca inteligente), séries, repetições, carga e
+// link de vídeo explicativo. Campos de ficha: dias da semana e restrições.
 // =====================================================================
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Plus, Pencil, Trash2, Dumbbell, ChevronDown } from 'lucide-react'
+import {
+  Plus,
+  Pencil,
+  Trash2,
+  Dumbbell,
+  ChevronDown,
+  PlayCircle,
+  CalendarDays,
+  HeartPulse,
+  Save
+} from 'lucide-react'
+import { supabase } from '../lib/supabase'
 import { useAlunos } from '../hooks/useAlunos'
 import { useTreinos } from '../hooks/useTreinos'
 import { useToast } from '../components/Toast'
@@ -13,11 +25,28 @@ import { Button, Input, Label, Select, Card, EstadoVazio, Spinner } from '../com
 
 const DIAS_FICHA = ['A', 'B', 'C', 'D']
 
-const EXERCICIO_VAZIO = { nome: '', series: 3, repeticoes: '10', carga: '' }
+const OPCOES_DIAS_SEMANA = [
+  'Segunda',
+  'Terça',
+  'Quarta',
+  'Quinta',
+  'Sexta',
+  'Sábado',
+  'Domingo'
+]
+
+const EXERCICIO_VAZIO = {
+  nome: '',
+  series: 3,
+  repeticoes: '10',
+  carga: '',
+  url_video: ''
+}
 
 export default function Treinos() {
   const { alunos, carregando: carregandoAlunos } = useAlunos()
-  const { treinos, carregarTreinos, salvarDia, removerDia } = useTreinos()
+  const { treinos, carregarTreinos, salvarDia, salvarFicha, removerDia } =
+    useTreinos()
   const { toast } = useToast()
 
   const [parametros, setParametros] = useSearchParams()
@@ -26,10 +55,30 @@ export default function Treinos() {
   // Modal de exercício
   const [modal, setModal] = useState(null) // { dia, indice?, exercicio? }
 
+  // Campos da ficha (dias da semana + restrições)
+  const [ficha, setFicha] = useState({ dias: [], restricoes: '' })
+  const [fichaInicializada, setFichaInicializada] = useState('')
+  const [salvandoFicha, setSalvandoFicha] = useState(false)
+
   useEffect(() => {
     if (alunoId) carregarTreinos(alunoId)
     else carregarTreinos(null)
   }, [alunoId, carregarTreinos])
+
+  // Inicializa o formulário de ficha a partir do banco (só quando troca de aluno)
+  useEffect(() => {
+    if (alunoId && fichaInicializada !== alunoId) {
+      const ref = treinos[0]
+      setFicha({
+        dias: (ref?.dias_semana || '')
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean),
+        restricoes: ref?.restricoes || ''
+      })
+      setFichaInicializada(alunoId)
+    }
+  }, [alunoId, treinos, fichaInicializada])
 
   const aluno = useMemo(
     () => alunos.find((a) => a.id === alunoId) || null,
@@ -41,13 +90,44 @@ export default function Treinos() {
     return treino ? treino.exercicios_json || [] : []
   }
 
+  // ----- Salvar dias da semana e restrições (ficha) -----
+  const salvarDadosFicha = async () => {
+    if (!alunoId) {
+      toast('Selecione um aluno primeiro.', 'aviso')
+      return
+    }
+    setSalvandoFicha(true)
+    try {
+      await salvarFicha(alunoId, {
+        dias_semana: ficha.dias.join(', '),
+        restricoes: ficha.restricoes.trim()
+      })
+      toast('Ficha atualizada (dias e restrições).')
+    } catch (e) {
+      toast(e.message || 'Erro ao salvar a ficha.', 'erro')
+    } finally {
+      setSalvandoFicha(false)
+    }
+  }
+
+  const alternarDiaSemana = (dia) =>
+    setFicha((f) => ({
+      ...f,
+      dias: f.dias.includes(dia)
+        ? f.dias.filter((d) => d !== dia)
+        : [...f.dias, dia]
+    }))
+
   // ----- Persistência de exercícios -----
   const persistir = async (dia, exercicios) => {
     if (exercicios.length === 0) {
       const treino = treinos.find((t) => t.dia_semana === dia)
       if (treino) await removerDia(treino.id)
     } else {
-      await salvarDia(alunoId, dia, exercicios)
+      await salvarDia(alunoId, dia, exercicios, {
+        dias_semana: ficha.dias.join(', '),
+        restricoes: ficha.restricoes.trim()
+      })
     }
   }
 
@@ -89,7 +169,7 @@ export default function Treinos() {
           Ficha de Treino
         </h1>
         <p className="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400">
-          Monstre os treinos do aluno por dia da semana (A, B, C...).
+          Dias da semana, restrições e treinos do aluno (A, B, C...).
         </p>
       </div>
 
@@ -124,7 +204,61 @@ export default function Treinos() {
         </Card>
       ) : (
         <>
-          {/* ---------- Dias da ficha ---------- */}
+          {/* ---------- Configurações da Ficha (dias + restrições) ---------- */}
+          <Card className="p-5">
+            <div className="mb-4 flex items-center gap-2">
+              <CalendarDays className="h-5 w-5 text-primary-600" />
+              <h2 className="font-bold text-zinc-900 dark:text-zinc-100">
+                Configurações da Ficha
+              </h2>
+            </div>
+
+            <div>
+              <Label>Dias da semana</Label>
+              <div className="flex flex-wrap gap-2">
+                {OPCOES_DIAS_SEMANA.map((dia) => {
+                  const ativo = ficha.dias.includes(dia)
+                  return (
+                    <button
+                      key={dia}
+                      type="button"
+                      onClick={() => alternarDiaSemana(dia)}
+                      className={`rounded-full px-3 py-1.5 text-sm font-semibold transition ${
+                        ativo
+                          ? 'bg-primary-600 text-white shadow'
+                          : 'bg-white text-zinc-600 ring-1 ring-zinc-200 hover:bg-zinc-50 dark:bg-zinc-800 dark:text-zinc-300 dark:ring-zinc-700 dark:hover:bg-zinc-700'
+                      }`}
+                    >
+                      {dia}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            <div className="mt-4">
+              <Label className="flex items-center gap-1.5">
+                <HeartPulse className="h-3.5 w-3.5" />
+                Restrições de movimento / Cuidados
+              </Label>
+              <textarea
+                value={ficha.restricoes}
+                onChange={(e) => setFicha((f) => ({ ...f, restricoes: e.target.value }))}
+                rows={3}
+                placeholder="Ex.: Lesão no ombro direito, evitar carga no joelho..."
+                className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition placeholder:text-zinc-400 focus:border-primary-500 focus:ring-2 focus:ring-primary-500/30 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder:text-zinc-500"
+              />
+            </div>
+
+            <div className="mt-4 flex justify-end">
+              <Button onClick={salvarDadosFicha} carregando={salvandoFicha} tamanho="sm">
+                <Save className="h-3.5 w-3.5" />
+                Salvar ficha
+              </Button>
+            </div>
+          </Card>
+
+          {/* ---------- Dias da ficha (Treino A, B, C, D) ---------- */}
           <div className="grid gap-4 md:grid-cols-2">
             {DIAS_FICHA.map((dia) => {
               const exercicios = listaExercicios(dia)
@@ -171,7 +305,18 @@ export default function Treinos() {
                               {ex.carga ? ` · ${ex.carga}` : ''}
                             </p>
                           </div>
-                          <div className="flex shrink-0 gap-1">
+                          <div className="flex shrink-0 items-center gap-1">
+                            {ex.url_video && (
+                              <a
+                                href={ex.url_video}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="rounded-lg p-2 text-primary-600 transition hover:bg-primary-50 dark:text-primary-400 dark:hover:bg-primary-950"
+                                title="Ver vídeo do exercício"
+                              >
+                                <PlayCircle className="h-4 w-4" />
+                              </a>
+                            )}
                             <button
                               onClick={() =>
                                 setModal({ dia, indice, exercicio: ex })
@@ -243,7 +388,8 @@ function FormExercicio({ inicial = null, onSalvar, onCancelar }) {
       nome: form.nome.trim(),
       series: Number(form.series) || 0,
       repeticoes: form.repeticoes,
-      carga: form.carga
+      carga: form.carga,
+      url_video: form.url_video.trim()
     })
   }
 
@@ -251,16 +397,20 @@ function FormExercicio({ inicial = null, onSalvar, onCancelar }) {
     <form onSubmit={enviar} className="space-y-4">
       <div>
         <Label>Nome do exercício *</Label>
-        <Input
-          value={form.nome}
-          onChange={(e) => set('nome', e.target.value)}
-          placeholder="Ex.: Supino reto com barra"
-          autoFocus
+        <ComboboxExercicio
+          valor={form.nome}
+          onChange={(v) => set('nome', v)}
+          placeholder="Digite ou escolha da base..."
         />
+        <p className="mt-1.5 text-xs text-zinc-400">
+          Sugestões da base de exercícios. Pode digitar qualquer nome — se não
+          existir na base, será salvo normalmente.
+        </p>
         {erros.nome && (
           <p className="mt-1 text-xs font-medium text-red-600">{erros.nome}</p>
         )}
       </div>
+
       <div className="grid grid-cols-3 gap-3">
         <div>
           <Label>Séries</Label>
@@ -288,6 +438,23 @@ function FormExercicio({ inicial = null, onSalvar, onCancelar }) {
           />
         </div>
       </div>
+
+      <div>
+        <Label className="flex items-center gap-1.5">
+          <PlayCircle className="h-3.5 w-3.5" />
+          Link do vídeo explicativo (YouTube/Vimeo)
+        </Label>
+        <Input
+          value={form.url_video}
+          onChange={(e) => set('url_video', e.target.value)}
+          placeholder="https://youtube.com/watch?v=..."
+          inputMode="url"
+        />
+        <p className="mt-1.5 text-xs text-zinc-400">
+          Opcional. O aluno verá o botão "Ver Vídeo" na ficha dele.
+        </p>
+      </div>
+
       <div className="flex justify-end gap-2 pt-2">
         <Button type="button" variante="secundario" onClick={onCancelar}>
           Cancelar
@@ -295,5 +462,78 @@ function FormExercicio({ inicial = null, onSalvar, onCancelar }) {
         <Button type="submit">Salvar exercício</Button>
       </div>
     </form>
+  )
+}
+
+// ---------- Combobox / Autocomplete (tabela exercicios_base) ----------
+function ComboboxExercicio({ valor, onChange, placeholder }) {
+  const [base, setBase] = useState([])
+  const [aberto, setAberto] = useState(false)
+
+  // Carrega a base de exercícios do Supabase (Musculação, Funcional, Corrida)
+  const carregarBase = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('exercicios_base')
+      .select('*')
+      .limit(1000)
+    if (error || !data) return
+    // Normaliza nomes de coluna (aceita variações de schema)
+    const normalizados = data
+      .map((r) => ({
+        nome: r.nome || r.exercicio || r.titulo || r.nome_exercicio || '',
+        categoria: r.categoria || r.tipo || r.grupo || r.modalidade || ''
+      }))
+      .filter((x) => x.nome)
+    setBase(normalizados)
+  }, [])
+
+  useEffect(() => {
+    carregarBase()
+  }, [carregarBase])
+
+  const termo = valor.trim().toLowerCase()
+  const filtradas = termo
+    ? base
+        .filter((e) => e.nome.toLowerCase().includes(termo))
+        .slice(0, 8)
+    : []
+
+  return (
+    <div className="relative">
+      <Input
+        value={valor}
+        onChange={(e) => {
+          onChange(e.target.value)
+          setAberto(true)
+        }}
+        onFocus={() => setAberto(true)}
+        onBlur={() => setTimeout(() => setAberto(false), 150)}
+        placeholder={placeholder}
+        autoFocus
+      />
+      {aberto && filtradas.length > 0 && (
+        <ul className="absolute z-20 mt-1 w-full overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-xl dark:border-zinc-700 dark:bg-zinc-800">
+          {filtradas.map((e) => (
+            <li key={e.nome}>
+              <button
+                type="button"
+                onMouseDown={() => {
+                  onChange(e.nome)
+                  setAberto(false)
+                }}
+                className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm text-zinc-800 transition hover:bg-primary-50 dark:text-zinc-100 dark:hover:bg-zinc-700"
+              >
+                <span className="truncate font-medium">{e.nome}</span>
+                {e.categoria && (
+                  <span className="shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-500 dark:bg-zinc-700 dark:text-zinc-300">
+                    {e.categoria}
+                  </span>
+                )}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   )
 }
