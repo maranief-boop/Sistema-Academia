@@ -12,10 +12,25 @@ export function useLeads() {
 
   const carregar = useCallback(async () => {
     setCarregando(true)
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from('leads')
       .select('*')
       .order('data_captura', { ascending: false })
+    // Fallback resiliente: se o cache do PostgREST ainda não conhece alguma
+    // coluna nova da tabela leads, o select('*') falha. Buscamos as colunas
+    // base para que os leads antigos continuem aparecendo.
+    if (error) {
+      const { data: d2, error: e2 } = await supabase
+        .from('leads')
+        .select(
+          'id, nome, telefone, origem, stage, notas, data_preferida, horario_preferido, data_captura, created_at'
+        )
+        .order('data_captura', { ascending: false })
+      if (!e2) {
+        data = d2
+        error = null
+      }
+    }
     if (error) {
       setErro(error.message)
     } else {

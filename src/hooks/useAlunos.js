@@ -11,10 +11,24 @@ export function useAlunos() {
 
   const carregar = useCallback(async () => {
     setCarregando(true)
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from('alunos')
       .select('*')
       .order('nome')
+    // Fallback resiliente: se o PostgREST ainda não conhece as colunas novas
+    // (data_ultimo_pagamento / forma_pagamento) no cache de schema, o select('*')
+    // falha com 400. Buscamos então apenas as colunas base para garantir que os
+    // alunos antigos apareçam na listagem.
+    if (error) {
+      const { data: d2, error: e2 } = await supabase
+        .from('alunos')
+        .select('id, nome, telefone, cpf, plano_valor, status_pagamento, data_vencimento, created_at')
+        .order('nome')
+      if (!e2) {
+        data = d2
+        error = null
+      }
+    }
     if (error) setErro(error.message)
     else setAlunos(data || [])
     setCarregando(false)

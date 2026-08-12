@@ -188,6 +188,13 @@ create table if not exists public.macrociclo (
   updated_at   timestamptz not null default now()
 );
 
+-- Garante que o app (chave anon) consiga LER/GRAVAR sem precisar configurar
+-- políticas de RLS. Se RLS estiver ativo sem política de SELECT para o role
+-- anon, o Supabase retorna lista VAZIA silenciosamente (sem erro) — o que faz
+-- os dados "sumirem" da tela. Desligar o RLS evita esse comportamento.
+alter table public.alunos disable row level security;
+alter table public.leads disable row level security;
+
 -- IMPORTANTE: recarrega o cache de schema do PostgREST para que as colunas
 -- e tabelas novas (treinos.dias_semana, treinos.restricoes, exercicios_base,
 -- leads, macrociclo) fiquem disponíveis IMEDIATAMENTE via API.
