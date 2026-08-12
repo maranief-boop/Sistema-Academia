@@ -18,6 +18,7 @@ import {
   CalendarDays
 } from 'lucide-react'
 import { useLeads } from '../hooks/useLeads'
+import { useAlunos } from '../hooks/useAlunos'
 import { useToast } from '../components/Toast'
 import { Modal } from '../components/Modal'
 import {
@@ -168,6 +169,7 @@ function CardLead({ lead, arrastando, onDragStart, onEdit, onDelete, onMover }) 
 
 export default function Crm() {
   const { leads, carregando, erro, criar, atualizar, remover } = useLeads()
+  const { alunos: alunosLista, criar: criarAluno } = useAlunos()
   const { toast } = useToast()
   const [periodo, setPeriodo] = useState('semana')
   const [modal, setModal] = useState(null) // null | 'novo' | lead
@@ -199,10 +201,46 @@ export default function Crm() {
   const serie = useMemo(() => construirSerie(filtradas, periodo), [filtradas, periodo])
   const maxSerie = Math.max(1, ...serie.map((b) => b.total))
 
+  // Converte um lead em aluno (aproveita nome e telefone), evitando duplicar
+  const converterLeadEmAluno = async (lead) => {
+    if (!lead) return
+    const tel = (lead.telefone || '').replace(/\D/g, '')
+    const jaExiste = alunosLista.some((a) => {
+      if (tel) return (a.telefone || '').replace(/\D/g, '') === tel
+      return (
+        a.nome &&
+        lead.nome &&
+        a.nome.toLowerCase().trim() === lead.nome.toLowerCase().trim()
+      )
+    })
+    if (jaExiste) {
+      toast(`${lead.nome} já consta na lista de alunos.`, 'aviso')
+      return
+    }
+    try {
+      await criarAluno({
+        nome: lead.nome,
+        telefone: lead.telefone,
+        status_pagamento: 'em_dia'
+      })
+      toast(`Lead ${lead.nome} convertido em aluno! 🎉`)
+    } catch (e) {
+      toast(`Erro ao converter em aluno: ${e.message || e}`, 'erro')
+    }
+  }
+
   const moverLead = async (id, stage) => {
     const r = await atualizar(id, { stage })
-    if (r.erro) toast(`Erro ao mover lead: ${r.erro}`, 'erro')
-    else toast(`Lead movido para "${STAGES[stage].curto}"`)
+    if (r.erro) {
+      toast(`Erro ao mover lead: ${r.erro}`, 'erro')
+      return
+    }
+    toast(`Lead movido para "${STAGES[stage].curto}"`)
+    // Conversão automática: ao virar "Matriculado", cadastra o aluno
+    if (stage === 'convertido') {
+      const lead = leads.find((l) => l && l.id === id)
+      converterLeadEmAluno(lead)
+    }
   }
 
   const abrirEdicao = (lead) => setModal(lead)
@@ -301,7 +339,7 @@ export default function Crm() {
       )}
 
       {/* Métricas */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
         <CardMetrica
           rotulo="Total"
           valor={metricas.total}
@@ -319,6 +357,12 @@ export default function Crm() {
           valor={metricas.atendimento}
           cor="text-yellow-500"
           icone={Headset}
+        />
+        <CardMetrica
+          rotulo="Aula Experimental"
+          valor={metricas.agendamento}
+          cor="text-orange-500"
+          icone={CalendarDays}
         />
         <CardMetrica
           rotulo="Matriculados"
@@ -533,13 +577,29 @@ export default function Crm() {
               placeholder="Observações do atendimento..."
             />
           </div>
-          <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variante="fantasma" onClick={() => setModal(null)}>
-              Cancelar
-            </Button>
-            <Button type="submit" carregando={salvando}>
-              {modal === 'novo' ? 'Criar lead' : 'Salvar'}
-            </Button>
+          <div className="flex items-center justify-between gap-2 pt-2">
+            <div>
+              {modal !== 'novo' && (
+                <Button
+                  type="button"
+                  variante="secundario"
+                  onClick={() => {
+                    converterLeadEmAluno(modal)
+                    setModal(null)
+                  }}
+                >
+                  <UserPlus className="h-4 w-4" /> Converter em Aluno
+                </Button>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <Button type="button" variante="fantasma" onClick={() => setModal(null)}>
+                Cancelar
+              </Button>
+              <Button type="submit" carregando={salvando}>
+                {modal === 'novo' ? 'Criar lead' : 'Salvar'}
+              </Button>
+            </div>
           </div>
         </form>
       </Modal>

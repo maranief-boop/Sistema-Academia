@@ -296,7 +296,7 @@ export default function Checkins() {
               Esperado
             </span>
             <span className="inline-flex items-center gap-1.5">
-              <span className="h-2.5 w-2.5 rounded-sm bg-emerald-500" />
+              <span className="h-2.5 w-2.5 rounded-sm bg-yellow-400" />
               Realizado
             </span>
           </div>
@@ -340,7 +340,7 @@ export default function Checkins() {
                         {real || ''}
                       </span>
                       <div
-                        className="w-full rounded-t bg-emerald-500 transition-all"
+                        className="w-full rounded-t bg-yellow-400 transition-all"
                         style={{
                           height: `${(real / maximoGrafico) * 100}%`,
                           minHeight: real ? 3 : 0
