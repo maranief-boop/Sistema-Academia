@@ -35,6 +35,7 @@ import { useToast } from '../components/Toast'
 import { useApp } from '../context/AppContext'
 import { abrirWhatsApp } from '../utils/whatsapp'
 import { dataParaInput } from '../utils/format'
+import fundoAcademia from '../assets/fundo.png'
 
 const HORARIOS = ['06:00', '07:00', '08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00', '20:00', '21:00']
 
@@ -201,7 +202,7 @@ export default function SiteInstitucional() {
       <section
         id="hero"
         className="relative flex min-h-screen items-center overflow-hidden pt-16"
-        style={{ background: "url('/fundo.png') center center / cover no-repeat" }}
+        style={{ background: `url(${fundoAcademia}) center center / cover no-repeat` }}
       >
         <div className="absolute inset-0 bg-black/70" />
         <div className="absolute inset-0 opacity-5">

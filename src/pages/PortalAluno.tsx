@@ -22,6 +22,7 @@ import {
   HeartPulse,
   CalendarDays
 } from 'lucide-react'
+import fundoAcademia from '../assets/fundo.png'
 
 type Aluno = {
   id: string
@@ -70,8 +71,8 @@ function FundoAcademia() {
   return (
     <>
       <div
-        className="fixed inset-0 bg-cover bg-center"
-        style={{ backgroundImage: "url('/fundo.png')" }}
+        className="fixed inset-0 -scale-105 bg-cover bg-center bg-no-repeat blur-[3px]"
+        style={{ backgroundImage: `url(${fundoAcademia})` }}
         aria-hidden
       />
       <div
@@ -82,12 +83,12 @@ function FundoAcademia() {
   )
 }
 
-// Logo da academia com brilho e pulso
+// Logo da academia em círculo com brilho e pulso
 function LogoPulsante({ tamanho = 'h-24 w-24' }) {
   const { config } = useApp()
   return (
     <div
-      className={`${tamanho} mx-auto flex items-center justify-center overflow-hidden rounded-[28px] bg-gradient-to-br from-primary-500 to-primary-700 shadow-[0_0_45px_-5px_rgba(16,185,129,0.55)] ring-1 ring-white/40 animate-pulse`}
+      className={`${tamanho} mx-auto flex items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-primary-500 to-primary-700 shadow-[0_0_45px_-5px_rgba(16,185,129,0.6)] ring-2 ring-white/40 animate-pulse`}
     >
       {config.logo_url ? (
         <img
@@ -96,7 +97,7 @@ function LogoPulsante({ tamanho = 'h-24 w-24' }) {
           className="h-full w-full object-cover"
         />
       ) : (
-        <span className="text-4xl font-extrabold text-white">
+        <span className="text-4xl font-extrabold text-white drop-shadow-md">
           {(config.nome_academia || 'A')[0].toUpperCase()}
         </span>
       )}
