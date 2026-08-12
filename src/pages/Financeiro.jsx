@@ -68,23 +68,19 @@ export default function Financeiro() {
   const [modalAberto, setModalAberto] = useState(false)
   const [alunoEditando, setAlunoEditando] = useState(null)
 
-  // ----- Receita efetiva (pagamentos já registrados) -----
+  // ----- Receita (regra unificada com Dashboard) -----
+  // Soma plano_valor de todos os alunos com status_pagamento !== 'inadimplente',
+  // independentemente de data_ultimo_pagamento. Igual ao faturamento do Dashboard.
   const receita = useMemo(() => {
-    const { hojeStr, inicioSemana, inicioMes, inicioAno } = limitesPeriodo()
-    const somar = (inicio) =>
+    const somar = () =>
       alunos
-        .filter(
-          (a) =>
-            a.data_ultimo_pagamento &&
-            a.data_ultimo_pagamento >= inicio &&
-            a.data_ultimo_pagamento <= hojeStr
-        )
+        .filter((a) => a.status_pagamento !== 'inadimplente')
         .reduce((s, a) => s + (Number(a.plano_valor) || 0), 0)
     return {
-      hoje: somar(hojeStr),
-      semana: somar(inicioSemana),
-      mes: somar(inicioMes),
-      ano: somar(inicioAno)
+      hoje: somar(),
+      semana: somar(),
+      mes: somar(),
+      ano: somar()
     }
   }, [alunos])
 
@@ -94,17 +90,9 @@ export default function Financeiro() {
     const vencendo = alunos.filter((a) => a.status_pagamento === 'vencendo')
     const inadimplentes = alunos.filter((a) => a.status_pagamento === 'inadimplente')
     const somar = (lista) => lista.reduce((s, a) => s + (Number(a.plano_valor) || 0), 0)
-    // Total a receber: soma dos planos dos alunos ativos com vencimento em aberto para o mês corrente.
-    // Filtra vencendo/inadimplentes cujo data_vencimento está no mês atual.
-    const hoje = new Date()
-    const mes = String(hoje.getMonth() + 1).padStart(2, '0')
-    const ano = hoje.getFullYear()
-    const mesAnoAtual = `${ano}-${mes}`
-    const totalReceber = somar(
-      [...vencendo, ...inadimplentes].filter(
-        (a) => a.data_vencimento?.slice(0, 7) === mesAnoAtual
-      )
-    )
+    // Total a receber: soma dos planos dos alunos com status_pagamento !== 'inadimplente',
+    // regra unificada com o Dashboard (ignora data_ultimo_pagamento).
+    const totalReceber = somar(alunos.filter((a) => a.status_pagamento !== 'inadimplente'))
     return {
       pagantes,
       vencendo,
