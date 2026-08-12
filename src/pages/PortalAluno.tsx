@@ -3,10 +3,11 @@
 // Mobile-first: login por CPF/telefone, check-in do dia, ficha de treino
 // e macrociclo. Visual glassmorphism sobre foto de academia.
 // =====================================================================
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useApp } from '../context/AppContext'
 import { useToast } from '../components/Toast'
+import { useCheckins } from '../hooks/useCheckins'
 import {
   AlertCircle,
   CalendarCheck,
@@ -280,6 +281,79 @@ export default function PortalAluno() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aluno?.id])
 
+  // ----- Frequência Semanal Personalizada -----
+  const { checkins: todosCheckins } = useCheckins()
+  const checkinsAluno = useMemo(
+    () => todosCheckins.filter((c) => c.aluno_id === aluno?.id),
+    [todosCheckins, aluno?.id]
+  )
+
+  const ORDEM = [1, 2, 3, 4, 5, 6, 0] // Seg/Segunda → Dom/Sábado
+  const ROTULOS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
+
+  const normalizar = (s) =>
+    (s || '')
+      .normalize('NFD')
+      .replace(/\p{Diacritic}/gu, '')
+      .toLowerCase()
+      .trim()
+
+  function parseDiasSemana(valor) {
+    if (!valor) return []
+    return valor
+      .split(',')
+      .map((p) => normalizar(p))
+      .map((t) => {
+        if (!t) return -1
+        for (const k of Object.keys(DIAS_NORMA)) {
+          if (t === k || t.startsWith(k)) return DIAS_NORMA[k]
+        }
+        return -1
+      })
+      .filter((d) => d >= 0)
+  }
+
+  // Mapeia nomes curtos/extensos para índice JS (0=Dom, 1=Seg, ..., 6=Sáb)
+  const DIAS_NORMA = {
+    dom: 0, domingo: 0,
+    seg: 1, segunda: 1,
+    ter: 2, 'terça': 2, terca: 2,
+    qua: 3, quarta: 3,
+    qui: 4, quinta: 4,
+    sex: 5, sexta: 5,
+    sab: 6, sábado: 6, sabado: 6
+  }
+
+  const frequenciaSemanal = useMemo(() => {
+    // Esperado por dia: baseado nos dias de treino do aluno
+    const diasPorAluno = new Set<number>()
+    treinos.forEach((t) => {
+      const dias = parseDiasSemana(t.dias_semana)
+      dias.forEach((d) => diasPorAluno.add(d))
+    })
+    const esperadosPorDia = Array(7).fill(0)
+    diasPorAluno.forEach((d) => (esperadosPorDia[d] += 1))
+
+    // Realizado por dia: baseado nos check-ins do aluno
+    const realizadosPorDia = Array(7).fill(0)
+    checkinsAluno.forEach((c) => {
+      realizadosPorDia[new Date(c.data_hora).getDay()] += 1
+    })
+
+    const maximo = Math.max(
+      ...esperadosPorDia,
+      ...realizadosPorDia,
+      1
+    )
+
+    return {
+      esperadosPorDia,
+      realizadosPorDia,
+      maximo,
+      comPlano: treinos.length > 0
+    }
+  }, [treinos, checkinsAluno])
+
   // Insere o check-in com data/hora atual (com bloqueio de repetição no dia)
   const fazerCheckin = async () => {
     if (!aluno) return
@@ -480,6 +554,70 @@ export default function PortalAluno() {
                     ? 'Verificando presença...'
                     : 'Fazer Check-in Agora'}
               </button>
+            )}
+          </section>
+
+          {/* ---------- Frequência Semanal ---------- */}
+          <section className={`${VIDRO} p-5 text-center`}>
+            <h2 className="text-xs font-medium uppercase tracking-wide text-white/60 mb-3">Frequência Semanal</h2>
+            {frequenciaSemanal.comPlano ? (
+              <div className="flex h-44 items-end gap-1.5">
+                {ORDEM.map((diaIdx) => {
+                  const esp = frequenciaSemanal.esperadosPorDia[diaIdx]
+                  const real = frequenciaSemanal.realizadosPorDia[diaIdx]
+                  const isHoje = diaIdx === new Date().getDay()
+                  return (
+                    <div
+                      key={diaIdx}
+                      className={`flex flex-1 flex-col items-center gap-1 ${
+                        isHoje ? 'rounded-lg bg-primary-50 px-0.5 py-1 dark:bg-primary-950/40' : ''
+                      }`}
+                    >
+                      <div className="flex h-full w-full items-end justify-center gap-1">
+                        <div className="flex w-3 flex-col items-center justify-end">
+                          <span className="mb-0.5 text-[10px] font-semibold text-primary-600">
+                            {esp}
+                          </span>
+                          <div
+                            className="flex w-3 rounded-t bg-primary-500 transition-all"
+                            style={{
+                              height: `${(esp / frequenciaSemanal.maximo) * 100}%`,
+                              minHeight: esp ? 3 : 0
+                            }}
+                            title={`Esperado (${ROTULOS[ORDEM.indexOf(diaIdx)]}): ${esp}`}
+                          />
+                        </div>
+                        <div className="flex w-3 flex-col items-center justify-end">
+                          <span className="mb-0.5 text-[10px] font-semibold text-emerald-600">
+                            {real}
+                          </span>
+                          <div
+                            className="flex w-3 rounded-t bg-yellow-400 transition-all"
+                            style={{
+                              height: `${(real / frequenciaSemanal.maximo) * 100}%`,
+                              minHeight: real ? 3 : 0
+                            }}
+                            title={`Realizado (${ROTULOS[ORDEM.indexOf(diaIdx)]}): ${real}`}
+                          />
+                        </div>
+                      </div>
+                      <span
+                        className={`text-[10px] ${
+                          isHoje
+                            ? 'font-bold text-primary-700 dark:text-primary-300'
+                            : 'text-zinc-400 dark:text-zinc-500'
+                        }`}
+                      >
+                        {ROTULOS[ORDEM.indexOf(diaIdx)]}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            ) : (
+              <div className="py-8 text-white/60">
+                Nenhum treino cadastrado para esta frequência
+              </div>
             )}
           </section>
 
