@@ -49,6 +49,16 @@ export function useTreinos() {
     return data || []
   }, [])
 
+  // SELECT — busca TODOS os treinos (usado para cruzar dias de treino
+  // com check-ins na página de Frequência). Retorna só o necessário.
+  const carregarTodos = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('treinos')
+      .select('aluno_id, dias_semana')
+    if (error) return []
+    return data || []
+  }, [])
+
   // UPSERT — salva (cria ou atualiza) a lista de exercícios de um dia
   // `ficha` (opcional) carrega dias_semana/restricoes junto no registro
   const salvarDia = useCallback(async (alunoId, diaSemana, exercicios, ficha = {}) => {
@@ -117,6 +127,7 @@ export function useTreinos() {
     treinos,
     carregando,
     carregarTreinos,
+    carregarTodos,
     salvarDia,
     salvarFicha,
     removerDia

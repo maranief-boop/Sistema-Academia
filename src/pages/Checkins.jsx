@@ -1,7 +1,9 @@
 // =====================================================================
-// Módulo de Check-in e Frequência (retenção)
+// Módulo de Check-in e Frequência (retenção + inteligência de frequência)
 // - Registra presença em tempo real no Supabase
-// - Alerta visual de quem não treina há mais de 7 dias
+// - Cruza os dias de treino (treinos.dias_semana) com os check-ins para
+//   comparar "Alunos Esperados" vs "Check-ins Realizados" por dia da semana
+// - Indicadores de adesão geral e destaque para alunos ausentes há dias
 // =====================================================================
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
@@ -12,10 +14,15 @@ import {
   AlertTriangle,
   CheckCircle2,
   UserX,
-  ChevronRight
+  ChevronRight,
+  BarChart3,
+  Target,
+  TrendingUp,
+  Activity
 } from 'lucide-react'
 import { useAlunos } from '../hooks/useAlunos'
 import { useCheckins } from '../hooks/useCheckins'
+import { useTreinos } from '../hooks/useTreinos'
 import { useToast } from '../components/Toast'
 import { Modal } from '../components/Modal'
 import { Card, Input, EstadoVazio, Spinner, Button } from '../components/ui'
@@ -29,6 +36,43 @@ import { mapaUltimoCheckin } from '../utils/metrics'
 
 const LIMITE = 7
 
+// Ordem de exibição (Segunda → Domingo) e rótulos curtos
+const ORDEM = [1, 2, 3, 4, 5, 6, 0]
+const ROTULOS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
+
+// Mapeia nomes de dias (com/sem acento, abreviados) para índice JS (0=Dom)
+const DIAS_NORMA = {
+  dom: 0, domingo: 0,
+  seg: 1, segunda: 1,
+  ter: 2, 'terça': 2, terca: 2,
+  qua: 3, quarta: 3,
+  qui: 4, quinta: 4,
+  sex: 5, sexta: 5,
+  sab: 6, sábado: 6, sabado: 6
+}
+
+const normalizar = (s) =>
+  (s || '')
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase()
+    .trim()
+
+function parseDiasSemana(valor) {
+  if (!valor) return []
+  return valor
+    .split(',')
+    .map((p) => normalizar(p))
+    .map((t) => {
+      if (!t) return -1
+      for (const k of Object.keys(DIAS_NORMA)) {
+        if (t === k || t.startsWith(k)) return DIAS_NORMA[k]
+      }
+      return -1
+    })
+    .filter((d) => d >= 0)
+}
+
 export default function Checkins() {
   const { alunos, carregando: carregandoAlunos } = useAlunos()
   const {
@@ -38,25 +82,94 @@ export default function Checkins() {
     registrarCheckin,
     fezCheckinHoje
   } = useCheckins()
+  const { carregarTodos } = useTreinos()
   const { toast } = useToast()
 
   const [modalAberto, setModalAberto] = useState(false)
   const [busca, setBusca] = useState('')
   const [registrando, setRegistrando] = useState(null)
+  const [treinosTodos, setTreinosTodos] = useState([])
 
   useEffect(() => {
     carregarCheckins()
-  }, [carregarCheckins])
+    carregarTodos().then(setTreinosTodos)
+  }, [carregarCheckins, carregarTodos])
 
   // ----- Alunos que não treinam há 7+ dias -----
   const ausentes = useMemo(() => {
     const ultimo = mapaUltimoCheckin(checkins)
-    return alunos.filter((a) => {
-      const ultimoCheck = ultimo[a.id]
-      if (!ultimoCheck) return diasDesde(a.created_at) >= LIMITE
-      return diasDesde(ultimoCheck) >= LIMITE
-    })
+    return alunos
+      .map((a) => {
+        const ultimoCheck = ultimo[a.id]
+        const atraso = ultimoCheck ? diasDesde(ultimoCheck) : diasDesde(a.created_at)
+        return { aluno: a, atraso }
+      })
+      .filter((x) => x.atraso >= LIMITE)
+      .sort((x, y) => y.atraso - x.atraso)
   }, [alunos, checkins])
+
+  // ----- Cruzamento: dias de treino (esperado) x check-ins (realizado) -----
+  const frequencia = useMemo(() => {
+    // Esperado por dia: união dos dias de treino de cada aluno
+    const diasPorAluno = {}
+    treinosTodos.forEach((t) => {
+      const dias = parseDiasSemana(t.dias_semana)
+      dias.forEach((d) => {
+        ;(diasPorAluno[t.aluno_id] ||= new Set()).add(d)
+      })
+    })
+    const esperadosPorDia = Array(7).fill(0)
+    Object.values(diasPorAluno).forEach((set) =>
+      set.forEach((d) => (esperadosPorDia[d] += 1))
+    )
+
+    // Realizado por dia: distribuição dos check-ins carregados
+    const realizadosPorDia = Array(7).fill(0)
+    checkins.forEach((c) => {
+      realizadosPorDia[new Date(c.data_hora).getDay()] += 1
+    })
+
+    const hojeIdx = new Date().getDay()
+    const esperadosHoje = esperadosPorDia[hojeIdx]
+    const checkinsHoje = checkins.filter(
+      (c) => new Date(c.data_hora).toDateString() === new Date().toDateString()
+    ).length
+
+    // Adesão geral (alunos que treinaram nos últimos 7 dias)
+    const ultimo = mapaUltimoCheckin(checkins)
+    const treinaram7 = alunos.filter((a) => {
+      const u = ultimo[a.id]
+      return u ? diasDesde(u) < LIMITE : diasDesde(a.created_at) < LIMITE
+    }).length
+    const adesao = alunos.length ? Math.round((treinaram7 / alunos.length) * 100) : 0
+
+    // Meta semanal: realizados nos últimos 7 dias / esperados em uma semana típica
+    const esperadosSemana = esperadosPorDia.reduce((s, v) => s + v, 0)
+    const realizados7 = checkins.filter(
+      (c) => diasDesde(c.data_hora) >= 0 && diasDesde(c.data_hora) < LIMITE
+    ).length
+    const cumprimento = esperadosSemana
+      ? Math.min(100, Math.round((realizados7 / esperadosSemana) * 100))
+      : 0
+
+    return {
+      esperadosPorDia,
+      realizadosPorDia,
+      esperadosHoje,
+      checkinsHoje,
+      adesao,
+      esperadosSemana,
+      realizados7,
+      cumprimento,
+      comPlano: Object.keys(diasPorAluno).length
+    }
+  }, [alunos, checkins, treinosTodos])
+
+  const maximoGrafico = Math.max(
+    ...frequencia.esperadosPorDia,
+    ...frequencia.realizadosPorDia,
+    1
+  )
 
   const alunosBuscados = useMemo(() => {
     const termo = busca.trim().toLowerCase()
@@ -93,7 +206,7 @@ export default function Checkins() {
             Check-in e Frequência
           </h1>
           <p className="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400">
-            Registre a presença dos alunos em tempo real.
+            Registre a presença e acompanhe a inteligência de frequência dos alunos.
           </p>
         </div>
         <Button
@@ -105,29 +218,177 @@ export default function Checkins() {
         </Button>
       </div>
 
-      {/* ---------- Alerta de evasão ---------- */}
+      {/* ---------- KPIs de frequência geral ---------- */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <Card className="p-4">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+              Adesão (7 dias)
+            </p>
+            <Activity className="h-4 w-4 text-primary-600" />
+          </div>
+          <p className="mt-1.5 text-2xl font-extrabold text-zinc-900 dark:text-zinc-100">
+            {frequencia.adesao}%
+          </p>
+          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+            alunos que treinaram na semana
+          </p>
+        </Card>
+
+        <Card className="p-4">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+              Esperados hoje
+            </p>
+            <Target className="h-4 w-4 text-sky-600" />
+          </div>
+          <p className="mt-1.5 text-2xl font-extrabold text-zinc-900 dark:text-zinc-100">
+            {frequencia.esperadosHoje}
+          </p>
+          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+            com treino marcado p/ hoje
+          </p>
+        </Card>
+
+        <Card className="p-4">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+              Check-ins hoje
+            </p>
+            <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+          </div>
+          <p className="mt-1.5 text-2xl font-extrabold text-zinc-900 dark:text-zinc-100">
+            {frequencia.checkinsHoje}
+          </p>
+          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+            presenças registradas
+          </p>
+        </Card>
+
+        <Card className="p-4">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+              Meta semanal
+            </p>
+            <TrendingUp className="h-4 w-4 text-amber-600" />
+          </div>
+          <p className="mt-1.5 text-2xl font-extrabold text-zinc-900 dark:text-zinc-100">
+            {frequencia.cumprimento}%
+          </p>
+          <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+            {frequencia.realizados7}/{frequencia.esperadosSemana} esperados
+          </p>
+        </Card>
+      </div>
+
+      {/* ---------- Gráfico: Esperado x Realizado por dia da semana ---------- */}
+      <Card className="p-5">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <BarChart3 className="h-4 w-4 text-primary-600" />
+            <h2 className="font-bold text-zinc-900 dark:text-zinc-100">
+              Esperado vs. Realizado por dia
+            </h2>
+          </div>
+          <div className="flex items-center gap-3 text-xs text-zinc-500 dark:text-zinc-400">
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-sm bg-primary-500" />
+              Esperado
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-sm bg-emerald-500" />
+              Realizado
+            </span>
+          </div>
+        </div>
+
+        {frequencia.comPlano === 0 ? (
+          <EstadoVazio
+            titulo="Sem dias de treino cadastrados"
+            descricao="Defina os dias de treino dos alunos na ficha de Treinos para projetar os alunos esperados."
+            icone={BarChart3}
+          />
+        ) : (
+          <div className="flex h-44 items-end gap-1.5">
+            {ORDEM.map((diaIdx) => {
+              const esp = frequencia.esperadosPorDia[diaIdx]
+              const real = frequencia.realizadosPorDia[diaIdx]
+              const isHoje = diaIdx === new Date().getDay()
+              return (
+                <div
+                  key={diaIdx}
+                  className={`flex flex-1 flex-col items-center gap-1 ${
+                    isHoje ? 'rounded-lg bg-primary-50 px-0.5 py-1 dark:bg-primary-950/40' : ''
+                  }`}
+                >
+                  <div className="flex h-full w-full items-end justify-center gap-1">
+                    <div className="flex w-3 flex-col items-center justify-end">
+                      <span className="mb-0.5 text-[10px] font-semibold text-primary-600">
+                        {esp || ''}
+                      </span>
+                      <div
+                        className="w-full rounded-t bg-primary-500 transition-all"
+                        style={{
+                          height: `${(esp / maximoGrafico) * 100}%`,
+                          minHeight: esp ? 3 : 0
+                        }}
+                        title={`Esperado (${ROTULOS[ORDEM.indexOf(diaIdx)]}): ${esp}`}
+                      />
+                    </div>
+                    <div className="flex w-3 flex-col items-center justify-end">
+                      <span className="mb-0.5 text-[10px] font-semibold text-emerald-600">
+                        {real || ''}
+                      </span>
+                      <div
+                        className="w-full rounded-t bg-emerald-500 transition-all"
+                        style={{
+                          height: `${(real / maximoGrafico) * 100}%`,
+                          minHeight: real ? 3 : 0
+                        }}
+                        title={`Realizado (${ROTULOS[ORDEM.indexOf(diaIdx)]}): ${real}`}
+                      />
+                    </div>
+                  </div>
+                  <span
+                    className={`text-[10px] ${
+                      isHoje
+                        ? 'font-bold text-primary-700 dark:text-primary-300'
+                        : 'text-zinc-400 dark:text-zinc-500'
+                    }`}
+                  >
+                    {ROTULOS[ORDEM.indexOf(diaIdx)]}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </Card>
+
+      {/* ---------- Alerta de evasão (destaque para ausentes) ---------- */}
       {ausentes.length > 0 && (
-        <Card className="border-l-4 border-l-amber-500 p-4">
+        <Card className="border-l-4 border-l-red-500 p-4">
           <div className="flex items-start gap-3">
-            <div className="rounded-xl bg-amber-100 p-2 text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+            <div className="rounded-xl bg-red-100 p-2 text-red-700 dark:bg-red-950 dark:text-red-300">
               <AlertTriangle className="h-5 w-5" />
             </div>
             <div className="min-w-0 flex-1">
               <p className="font-bold text-zinc-900 dark:text-zinc-100">
-                {ausentes.length} aluno(s) não treinam há mais de {LIMITE} dias
+                {ausentes.length} aluno(s) ausente(s) há mais de {LIMITE} dias
               </p>
               <p className="text-sm text-zinc-500 dark:text-zinc-400">
-                Chame esses alunos no WhatsApp para evitar a evasão.
+                Priorize a recuperação: chame esses alunos no WhatsApp para evitar a evasão.
               </p>
               <div className="mt-3 flex flex-wrap gap-1.5">
-                {ausentes.slice(0, 6).map((a) => (
+                {ausentes.slice(0, 6).map(({ aluno, atraso }) => (
                   <Link
-                    key={a.id}
+                    key={aluno.id}
                     to={`/financeiro`}
-                    className="inline-flex items-center gap-1.5 rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-semibold text-zinc-700 transition hover:bg-amber-100 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-amber-950"
+                    className="inline-flex items-center gap-1.5 rounded-full bg-red-100 px-2.5 py-1 text-xs font-semibold text-red-700 transition hover:bg-red-200 dark:bg-red-950 dark:text-red-300 dark:hover:bg-red-900"
                   >
-                    <UserX className="h-3 w-3 text-amber-500" />
-                    {a.nome}
+                    <UserX className="h-3 w-3" />
+                    {aluno.nome}
+                    <span className="opacity-70">· {atraso}d</span>
                   </Link>
                 ))}
                 {ausentes.length > 6 && (
@@ -185,7 +446,7 @@ export default function Checkins() {
           )}
         </Card>
 
-        {/* ---------- Frequência geral ---------- */}
+        {/* ---------- Situação dos alunos (destaque de ausência) ---------- */}
         <Card className="p-5">
           <div className="mb-3 flex items-center gap-2">
             <CalendarCheck className="h-4 w-4 text-primary-600" />
@@ -209,12 +470,12 @@ export default function Checkins() {
                 return (
                   <li
                     key={a.id}
-                    className={`flex items-center gap-3 rounded-xl px-2.5 py-2 ${
+                    className={`flex items-center gap-3 rounded-xl border-l-4 px-2.5 py-2 ${
                       risco
-                        ? 'bg-red-50 dark:bg-red-950/40'
+                        ? 'border-l-red-500 bg-red-50 dark:bg-red-950/40'
                         : hoje
-                          ? 'bg-emerald-50 dark:bg-emerald-950/40'
-                          : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/50'
+                          ? 'border-l-emerald-500 bg-emerald-50 dark:bg-emerald-950/40'
+                          : 'border-l-transparent hover:bg-zinc-50 dark:hover:bg-zinc-800/50'
                     }`}
                   >
                     <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-zinc-200 text-[10px] font-bold text-zinc-600 dark:bg-zinc-700 dark:text-zinc-200">
