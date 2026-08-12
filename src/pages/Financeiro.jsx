@@ -61,7 +61,7 @@ function limitesPeriodo() {
 
 export default function Financeiro() {
   const { config } = useApp()
-  const { alunos, carregando, atualizar } = useAlunos()
+  const { alunos, carregando, erro, atualizar } = useAlunos()
   const { toast } = useToast()
 
   const [filtro, setFiltro] = useState('todos')
@@ -110,6 +110,8 @@ export default function Financeiro() {
   }
 
   const filtrados = useMemo(() => {
+    // 'todos' deve listar CADA aluno da tabela, independentemente de ter
+    // data_ultimo_pagamento ou forma_pagamento preenchidos.
     if (filtro === 'todos') return alunos
     if (filtro === 'pagantes')
       return alunos
@@ -184,6 +186,18 @@ export default function Financeiro() {
           Acompanhe a receita e cobre os alunos — o objetivo é zerar a inadimplência.
         </p>
       </div>
+
+      {/* ---------- Aviso de falha na busca ---------- */}
+      {erro && (
+        <div className="rounded-2xl border border-red-300 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
+          <p className="font-semibold">Não foi possível carregar os alunos.</p>
+          <p className="mt-1">{erro}</p>
+          <p className="mt-1 text-xs opacity-80">
+            Se o erro mencionar uma coluna inexistente, rode o <code>schema.sql</code> no
+            Supabase (o <code>NOTIFY pgrst</code> ao final recarrega o cache de schema).
+          </p>
+        </div>
+      )}
 
       {/* ---------- Receita efetiva ---------- */}
       <div>
