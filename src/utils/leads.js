@@ -45,6 +45,13 @@ export const STAGE_LABELS = STAGES_ORDER.reduce((acc, s) => {
   return acc
 }, {})
 
+// Data de referência de um lead para agrupar no tempo: prioriza data_captura,
+// mas cai para created_at quando a coluna data_captura não existe/está vazia.
+// Garante que o gráfico desenhe mesmo para leads antigos sem data_captura.
+export function dataReferenciaLead(l) {
+  return l && (l.data_captura || l.created_at)
+}
+
 // Retorna a data/hora de início do período de filtro (ou null = todos)
 export function getPeriodStart(period) {
   const agora = new Date()
@@ -118,8 +125,9 @@ export function construirSerie(leads, periodo) {
   return buckets.map((b) => ({
     rotulo: b.rotulo,
     total: leads.filter((l) => {
-      if (!l || !l.data_captura) return false
-      const t = new Date(l.data_captura)
+      const ref = dataReferenciaLead(l)
+      if (!ref) return false
+      const t = new Date(ref)
       return t >= b.inicio && t < b.fim
     }).length
   }))

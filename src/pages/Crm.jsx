@@ -36,6 +36,7 @@ import {
   formatarCaptura,
   construirSerie,
   construirDoughnut,
+  dataReferenciaLead,
   baixarCSV
 } from '../utils/leads'
 import { linkWhatsApp } from '../utils/whatsapp'
@@ -117,7 +118,7 @@ function CardLead({ lead, arrastando, onDragStart, onEdit, onDelete, onMover }) 
               {lead.origem}
             </span>
           )}
-          <span>{formatarCaptura(lead?.data_captura)}</span>
+          <span>{formatarCaptura(dataReferenciaLead(lead))}</span>
         </div>
         <div className="flex items-center gap-1 opacity-100 transition md:opacity-0 md:group-hover:opacity-100">
           {wa && (
@@ -177,7 +178,10 @@ export default function Crm() {
     const inicio = getPeriodStart(periodo)
     const validos = leads.filter(Boolean)
     if (!inicio) return validos
-    return validos.filter((l) => new Date(l?.data_captura) >= inicio)
+    return validos.filter((l) => {
+      const ref = dataReferenciaLead(l)
+      return ref ? new Date(ref) >= inicio : false
+    })
   }, [leads, periodo])
 
   const metricas = useMemo(() => {
@@ -368,21 +372,45 @@ export default function Crm() {
           <p className="mb-4 text-[11px] text-zinc-500">
             Captações por dia no período
           </p>
-          <div className="flex h-40 items-end gap-1">
+          <div className="h-40 w-full">
+            {(() => {
+              const pontos = serie.map((b, i) => {
+                const n = serie.length
+                const x = n === 1 ? 50 : (i / (n - 1)) * 100
+                const y = 40 - (b.total / maxSerie) * 36
+                return `${x.toFixed(2)},${y.toFixed(2)}`
+              })
+              const linha = pontos.join(' ')
+              const area = `0,40 ${linha} 100,40`
+              return (
+                <svg
+                  viewBox="0 0 100 40"
+                  preserveAspectRatio="none"
+                  className="h-full w-full"
+                >
+                  <polygon points={area} fill="rgb(var(--p-500))" fillOpacity="0.18" />
+                  <polyline
+                    points={linha}
+                    fill="none"
+                    stroke="rgb(var(--p-500))"
+                    strokeWidth="2"
+                    strokeLinejoin="round"
+                    strokeLinecap="round"
+                    vectorEffect="non-scaling-stroke"
+                  />
+                </svg>
+              )
+            })()}
+          </div>
+          <div className="mt-1 flex justify-between px-1">
             {serie.map((b, i) => (
-              <div
+              <span
                 key={i}
-                className="group flex flex-1 flex-col items-center gap-1"
+                className="text-[8px] text-zinc-400"
                 title={`${b.rotulo}: ${b.total} lead(s)`}
               >
-                <div
-                  className="w-full rounded-t bg-gradient-to-t from-primary-600 to-primary-400 transition group-hover:from-primary-500 group-hover:to-primary-300"
-                  style={{ height: `${(b.total / maxSerie) * 100}%`, minHeight: b.total ? 4 : 2 }}
-                />
-                {i % 2 === 0 && (
-                  <span className="text-[8px] text-zinc-400">{b.rotulo}</span>
-                )}
-              </div>
+                {i % 2 === 0 ? b.rotulo : ''}
+              </span>
             ))}
           </div>
         </Card>

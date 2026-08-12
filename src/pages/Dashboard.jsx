@@ -142,7 +142,7 @@ export default function Dashboard() {
                 <div
                   className="w-full rounded-t-lg bg-gradient-to-t from-primary-600 to-primary-400 transition-all"
                   style={{
-                    height: `${Math.max((g.total / maximoGrafico) * 100, g.total > 0 ? 8 : 4)}%`
+                    height: `${g.total ? Math.max(8, Math.round((g.total / maximoGrafico) * 110)) : 4}px`
                   }}
                   title={`${formatarData(g.data)}: ${g.total} check-in(s)`}
                 />
