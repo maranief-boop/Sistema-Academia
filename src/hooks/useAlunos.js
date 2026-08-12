@@ -22,7 +22,7 @@ export function useAlunos() {
     if (error) {
       const { data: d2, error: e2 } = await supabase
         .from('alunos')
-        .select('id, nome, telefone, cpf, plano_valor, status_pagamento, data_vencimento, created_at')
+        .select('id, nome, telefone, cpf, plano_valor, status_pagamento, data_vencimento, data_ultimo_pagamento, forma_pagamento, created_at')
         .order('nome')
       if (!e2) {
         data = d2

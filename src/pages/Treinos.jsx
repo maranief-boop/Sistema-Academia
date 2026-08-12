@@ -73,6 +73,9 @@ export default function Treinos() {
     Object.fromEntries(DIAS_FICHA.map((d) => [d, []]))
   )
   const [fichaInicializada, setFichaInicializada] = useState('')
+  // Aluno cujos treinos já terminaram de carregar (evita inicializar o
+  // estado com `treinos` ainda vazio e travar a leitura dos dias salvos)
+  const [treinosAluno, setTreinosAluno] = useState('')
 
   // Macrociclo (12 semanas)
   const [modalMacro, setModalMacro] = useState(false)
@@ -81,13 +84,21 @@ export default function Treinos() {
   const [macrolInicializado, setMacrolInicializado] = useState('')
 
   useEffect(() => {
-    if (alunoId) carregarTreinos(alunoId)
-    else carregarTreinos(null)
+    if (alunoId) {
+      setTreinosAluno('')
+      carregarTreinos(alunoId).then(() => setTreinosAluno(alunoId))
+    } else {
+      carregarTreinos(null)
+      setTreinosAluno('')
+    }
   }, [alunoId, carregarTreinos])
 
-  // Inicializa restrições + dias por card a partir do banco (por aluno)
+  // Inicializa restrições + dias por card a partir do banco (por aluno).
+  // Só roda DEPOIS que os treinos do aluno terminaram de carregar, para
+  // não travar `fichaInicializada` com `treinos` ainda vazio (o que fazia
+  // os dias marcados somer ao recarregar a página).
   useEffect(() => {
-    if (alunoId && fichaInicializada !== alunoId) {
+    if (alunoId && treinosAluno === alunoId && fichaInicializada !== alunoId) {
       const mapa = {}
       DIAS_FICHA.forEach((d) => {
         const t = treinos.find((tt) => tt.dia_semana === d)
@@ -100,7 +111,7 @@ export default function Treinos() {
       setRestricoes(treinos[0]?.restricoes || '')
       setFichaInicializada(alunoId)
     }
-  }, [alunoId, treinos, fichaInicializada])
+  }, [alunoId, treinos, treinosAluno, fichaInicializada])
 
   // Carrega o macrociclo do aluno
   useEffect(() => {
