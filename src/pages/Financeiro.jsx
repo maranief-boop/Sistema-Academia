@@ -94,11 +94,22 @@ export default function Financeiro() {
     const vencendo = alunos.filter((a) => a.status_pagamento === 'vencendo')
     const inadimplentes = alunos.filter((a) => a.status_pagamento === 'inadimplente')
     const somar = (lista) => lista.reduce((s, a) => s + (Number(a.plano_valor) || 0), 0)
+    // Total a receber: soma dos planos dos alunos ativos com vencimento em aberto para o mês corrente.
+    // Filtra vencendo/inadimplentes cujo data_vencimento está no mês atual.
+    const hoje = new Date()
+    const mes = String(hoje.getMonth() + 1).padStart(2, '0')
+    const ano = hoje.getFullYear()
+    const mesAnoAtual = `${ano}-${mes}`
+    const totalReceber = somar(
+      [...vencendo, ...inadimplentes].filter(
+        (a) => a.data_vencimento?.slice(0, 7) === mesAnoAtual
+      )
+    )
     return {
       pagantes,
       vencendo,
       inadimplentes,
-      totalReceber: somar([...vencendo, ...inadimplentes]),
+      totalReceber,
       inadimplencia: somar(inadimplentes)
     }
   }, [alunos])
@@ -280,8 +291,9 @@ export default function Financeiro() {
         <Card className="overflow-hidden">
           <ul className="divide-y divide-zinc-200 dark:divide-zinc-800">
             {filtrados.map((aluno) => {
-              const atraso = aluno.data_vencimento ? diasDesde(aluno.data_vencimento) : null
-              const vencido = atraso !== null && atraso > 0
+              const statusNaoEmoDia = aluno.status_pagamento !== 'em_dia'
+  const atraso = statusNaoEmoDia && aluno.data_vencimento ? diasDesde(aluno.data_vencimento) : null
+  const vencido = atraso !== null && atraso > 0
               return (
                 <li
                   key={aluno.id}
