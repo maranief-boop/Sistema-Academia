@@ -10,7 +10,8 @@ import {
   UserX,
   CalendarCheck,
   MessageCircle,
-  ChevronRight
+  ChevronRight,
+  Dumbbell
 } from 'lucide-react'
 import { useAlunos } from '../hooks/useAlunos'
 import { useCheckins } from '../hooks/useCheckins'
@@ -79,35 +80,39 @@ export default function Dashboard() {
         </p>
       </div>
 
-      {/* ---------- Cards de métricas ---------- */}
+      {/* ---------- Cards de métricas (clicáveis) ---------- */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <MetricCard
           titulo="Faturamento Mensal"
           valor={formatarMoeda(metricas.faturamento)}
-          sub="Soma dos planos pagantes/vencendo"
+          sub="Ver financeiro"
           icone={Banknote}
           cor="primary"
+          to="/financeiro"
         />
         <MetricCard
           titulo="Alunos Ativos"
           valor={metricas.total}
-          sub={`${metricas.inadimplentes} inadimplente(s)`}
+          sub={`${metricas.inadimplentes} inadimplente(s) · ver alunos`}
           icone={Users}
           cor="azul"
+          to="/alunos"
         />
         <MetricCard
           titulo="Inadimplência"
           valor={`${String(metricas.taxaInadimplencia).replace('.', ',')}%`}
-          sub={`${metricas.inadimplentes} aluno(s) atrasado(s)`}
+          sub={`${metricas.inadimplentes} atrasado(s) · cobrar`}
           icone={AlertTriangle}
           cor="vermelho"
+          to="/financeiro"
         />
         <MetricCard
           titulo="Risco de Evasão"
           valor={metricas.emRisco.length}
-          sub="Sem treinar há mais de 7 dias"
+          sub="Sem treinar há mais de 7 dias · ver alunos"
           icone={UserX}
           cor="ambar"
+          to="/alunos"
         />
       </div>
 
@@ -207,7 +212,7 @@ export default function Dashboard() {
           { to: '/financeiro', label: 'Cobrar alunos', icone: MessageCircle, cor: 'from-emerald-500 to-emerald-600' },
           { to: '/checkins', label: 'Fazer check-in', icone: CalendarCheck, cor: 'from-primary-500 to-primary-600' },
           { to: '/alunos', label: 'Novo aluno', icone: Users, cor: 'from-sky-500 to-sky-600' },
-          { to: '/treinos', label: 'Montar treino', icone: Banknote, cor: 'from-amber-500 to-amber-600' }
+          { to: '/treinos', label: 'Montar treino', icone: Dumbbell, cor: 'from-amber-500 to-amber-600' }
         ].map(({ to, label, icone: Icone, cor }) => (
           <Link
             key={to}

@@ -20,15 +20,19 @@ create table if not exists public.alunos (
   plano_valor       numeric(10,2) not null default 0,
   status_pagamento  text not null default 'em_dia',
   data_vencimento   date,
+  data_ultimo_pagamento date,  -- novo campo para rastreamento de recibos
+  forma_pagamento   text,       -- Dinheiro, Pix, Cartão, Boleto, Transferência...
   created_at        timestamptz not null default now(),
   constraint alunos_status_check check (status_pagamento in ('em_dia', 'vencendo', 'inadimplente'))
 );
 
--- Para bancos já existentes: adiciona a coluna cpf sem quebrar os dados
-alter table public.alunos add column if not exists cpf text;
+-- Para bancos já existentes: adiciona as colunas sem quebrar os dados
+alter table public.alunos add column if not exists data_ultimo_pagamento date;
+alter table public.alunos add column if not exists forma_pagamento text;
 
 create index if not exists alunos_status_idx on public.alunos (status_pagamento);
 create index if not exists alunos_vencimento_idx on public.alunos (data_vencimento);
+create index if not exists alunos_ultimo_pagamento_idx on public.alunos (data_ultimo_pagamento);
 
 -- ---------------------------------------------------------------------
 -- Tabela: treinos (ficha por aluno, dividida por dia_semana: A, B, C...)
