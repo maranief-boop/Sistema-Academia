@@ -7,7 +7,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useApp } from '../context/AppContext'
 import { useToast } from '../components/Toast'
-import { useCheckins } from '../hooks/useCheckins'
 import {
   AlertCircle,
   CalendarCheck,
@@ -24,6 +23,7 @@ import {
   HeartPulse,
   CalendarDays,
   Timer,
+  TrendingUp,
   X
 } from 'lucide-react'
 import fundoAcademia from '../assets/fundo.png'
@@ -129,6 +129,87 @@ function iniciais(nome: string): string {
     .join('')
 }
 
+// Gráfico de linha simples (SVG) para a evolução do PSE (0-10)
+function GraficoPse({ pontos }: { pontos: { data: string; pse: number }[] }) {
+  if (pontos.length === 0) return null
+  const LARGURA = 320
+  const ALTURA = 130
+  const PAD = 10
+  const n = pontos.length
+  const valores = pontos.map((p) => Number(p.pse))
+
+  const aux = (i: number, v: number) => {
+    const x = PAD + (i * (LARGURA - 2 * PAD)) / Math.max(1, n - 1)
+    const y = ALTURA - PAD - (v / 10) * (ALTURA - 2 * PAD)
+    return `${x.toFixed(1)},${y.toFixed(1)}`
+  }
+  const linha = valores.map((v, i) => `L${aux(i, v)}`).join(' ').replace('L', 'M')
+  const area = `${linha} L${aux(n - 1, 0).split(',')[0]},${ALTURA - PAD} L${aux(0, 0).split(',')[0]},${ALTURA - PAD} Z`
+
+  const dataRotulo = (d: string) =>
+    new Date(d).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+
+  return (
+    <svg viewBox={`0 0 ${LARGURA} ${ALTURA}`} className="w-full">
+      {/* Linhas de referência (0, 2.5, 5, 7.5, 10) */}
+      {[0, 2.5, 5, 7.5, 10].map((v) => {
+        const y = ALTURA - PAD - (v / 10) * (ALTURA - 2 * PAD)
+        return (
+          <line
+            key={v}
+            x1={PAD}
+            x2={LARGURA - PAD}
+            y1={y}
+            y2={y}
+            stroke="rgba(255,255,255,0.08)"
+            strokeWidth="1"
+          />
+        )
+      })}
+      {/* Área preenchida */}
+      <path
+        d={area}
+        fill="rgba(16,185,129,0.18)"
+        stroke="none"
+      />
+      {/* Linha principal */}
+      <path
+        d={linha}
+        fill="none"
+        stroke="#10b981"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      {/* Pontos */}
+      {valores.map((v, i) => (
+        <circle
+          key={i}
+          cx={aux(i, v).split(',')[0]}
+          cy={aux(i, v).split(',')[1]}
+          r="3"
+          fill="#161616"
+          stroke="#10b981"
+          strokeWidth="2"
+        />
+      ))}
+      {/* Rótulos: primeiro, meio e último */}
+      {[0, Math.floor((n - 1) / 2), n - 1].map((i) => (
+        <text
+          key={i}
+          x={aux(i, valores[i]).split(',')[0]}
+          y={ALTURA - 3}
+          textAnchor="middle"
+          fontSize="8"
+          fill="rgba(255,255,255,0.45)"
+        >
+          {dataRotulo(pontos[i].data)}
+        </text>
+      ))}
+    </svg>
+  )
+}
+
 export default function PortalAluno() {
   const { config } = useApp()
   const { toast } = useToast()
@@ -162,6 +243,11 @@ export default function PortalAluno() {
   const [pse, setPse] = useState(5)
   const [observacoes, setObservacoes] = useState('')
   const [salvandoFeedback, setSalvandoFeedback] = useState(false)
+
+  // ---------- Histórico de treinos (PSE + frequência por período) ----------
+  const [historicoTreinos, setHistoricoTreinos] = useState<any[]>([])
+  const [carregandoHistorico, setCarregandoHistorico] = useState(false)
+  const [periodoFrequencia, setPeriodoFrequencia] = useState<'semanal' | 'mensal' | 'anual'>('semanal')
 
   const aluno = sessao?.aluno ?? null
 
@@ -286,24 +372,40 @@ export default function PortalAluno() {
     }
   }, [aluno])
 
+  // Carrega o histórico de treinos concluídos (PSE + frequência) do aluno
+  const carregarHistorico = useCallback(async () => {
+    if (!aluno) {
+      setHistoricoTreinos([])
+      return
+    }
+    setCarregandoHistorico(true)
+    try {
+      const { data, error } = await supabase
+        .from('historico_treinos')
+        .select('*')
+        .eq('aluno_id', aluno.id)
+        .order('data', { ascending: true })
+      if (!error) setHistoricoTreinos((data as any[]) || [])
+    } catch {
+      // sem ação: gráficos ficam vazios
+    } finally {
+      setCarregandoHistorico(false)
+    }
+  }, [aluno])
+
   useEffect(() => {
     if (aluno) {
       verificarCheckinHoje()
       carregarFicha()
       carregarMacrociclo()
+      carregarHistorico()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aluno?.id])
 
-  // ----- Frequência Semanal Personalizada -----
-  const { checkins: todosCheckins } = useCheckins()
-  const checkinsAluno = useMemo(
-    () => todosCheckins.filter((c) => c.aluno_id === aluno?.id),
-    [todosCheckins, aluno?.id]
-  )
-
   const ORDEM = [1, 2, 3, 4, 5, 6, 0] // Seg/Segunda → Dom/Sábado
   const ROTULOS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
+  const MESES_ROTULO = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
 
   const normalizar = (s) =>
     (s || '')
@@ -338,35 +440,65 @@ export default function PortalAluno() {
     sab: 6, sábado: 6, sabado: 6
   }
 
-  const frequenciaSemanal = useMemo(() => {
-    // Esperado por dia: baseado nos dias de treino do aluno
-    const diasPorAluno = new Set<number>()
-    treinos.forEach((t) => {
-      const dias = parseDiasSemana(t.dias_semana)
-      dias.forEach((d) => diasPorAluno.add(d))
-    })
+  // ----- Frequência por período (Semanal / Mensal / Anual) a partir do historico_treinos -----
+  const frequenciaPeriodo = useMemo(() => {
+    const inicioDaSemana = (() => {
+      const d = new Date()
+      d.setHours(0, 0, 0, 0)
+      const dia = (d.getDay() + 6) % 7 // segunda = 0
+      d.setDate(d.getDate() - dia)
+      return d
+    })()
+    const hoje = new Date()
+    const ano = hoje.getFullYear()
+    const mes = hoje.getMonth()
+
+    // ---- Semanal: 7 barras (Seg-Dom), esperado do plano + realizado do histórico ----
     const esperadosPorDia = Array(7).fill(0)
-    diasPorAluno.forEach((d) => (esperadosPorDia[d] += 1))
-
-    // Realizado por dia: baseado nos check-ins do aluno
+    treinos.forEach((t) => {
+      parseDiasSemana(t.dias_semana).forEach((d) => (esperadosPorDia[d] += 1))
+    })
     const realizadosPorDia = Array(7).fill(0)
-    checkinsAluno.forEach((c) => {
-      realizadosPorDia[new Date(c.data_hora).getDay()] += 1
+
+    // ---- Mensal: barras por semana do mês corrente (até 5) ----
+    const realizadosPorSemana = [0, 0, 0, 0, 0]
+    // ---- Anual: 12 barras (Jan-Dez) ----
+    const realizadosPorMes = Array(12).fill(0)
+
+    historicoTreinos.forEach((h) => {
+      const d = new Date(h.data)
+      if (d.getFullYear() === ano) realizadosPorMes[d.getMonth()] += 1
+      if (d.getFullYear() === ano && d.getMonth() === mes) {
+        const semana = Math.min(4, Math.floor((d.getDate() - 1) / 7))
+        realizadosPorSemana[semana] += 1
+      }
+      if (d >= inicioDaSemana) realizadosPorDia[d.getDay()] += 1
     })
 
-    const maximo = Math.max(
-      ...esperadosPorDia,
-      ...realizadosPorDia,
-      1
-    )
+    const totalSemanal = realizadosPorDia.reduce((s, v) => s + v, 0)
+    const totalMensal = realizadosPorSemana.reduce((s, v) => s + v, 0)
+    const totalAnual = realizadosPorMes.reduce((s, v) => s + v, 0)
+
+    const maximoSemana = Math.max(1, ...esperadosPorDia, ...realizadosPorDia)
+    const maximoMes = Math.max(1, ...realizadosPorSemana)
+    const maximoAno = Math.max(1, ...realizadosPorMes)
 
     return {
-      esperadosPorDia,
-      realizadosPorDia,
-      maximo,
-      comPlano: treinos.length > 0
+      semanal: { esperadosPorDia, realizadosPorDia, maximo: maximoSemana, total: totalSemanal },
+      mensal: { realizadosPorSemana, maximo: maximoMes, total: totalMensal },
+      anual: { realizadosPorMes, maximo: maximoAno, total: totalAnual }
     }
-  }, [treinos, checkinsAluno])
+  }, [treinos, historicoTreinos])
+
+  // ----- Evolução do PSE (últimos 14 treinos concluídos) -----
+  const pseSerie = useMemo(() => {
+    const pontos = historicoTreinos
+      .filter((h) => h.pse != null)
+      .slice(-14)
+    if (pontos.length === 0) return null
+    const media = pontos.reduce((s, h) => s + Number(h.pse), 0) / pontos.length
+    return { pontos, media }
+  }, [historicoTreinos])
 
   // Insere o check-in com data/hora atual (com bloqueio de repetição no dia)
   const fazerCheckin = async () => {
@@ -437,6 +569,7 @@ export default function PortalAluno() {
       setCronometroAtivo(false)
       setTempoDecorrido(0)
       setModalFeedback(false)
+      carregarHistorico()
     } catch (e: any) {
       toast(e?.message || 'Erro ao salvar o treino.', 'erro')
     } finally {
@@ -671,66 +804,230 @@ export default function PortalAluno() {
             </div>
           </section>
 
-          {/* ---------- Frequência Semanal ---------- */}
-          <section className={`${VIDRO} p-5 text-center`}>
-            <h2 className="text-xs font-medium uppercase tracking-wide text-white/60 mb-3">Frequência Semanal</h2>
-            {frequenciaSemanal.comPlano ? (
-              <div className="flex h-44 items-end gap-1.5">
-                {ORDEM.map((diaIdx) => {
-                  const esp = frequenciaSemanal.esperadosPorDia[diaIdx]
-                  const real = frequenciaSemanal.realizadosPorDia[diaIdx]
-                  const isHoje = diaIdx === new Date().getDay()
-                  return (
-                    <div
-                      key={diaIdx}
-                      className={`flex flex-1 flex-col items-center gap-1 ${
-                        isHoje ? 'rounded-lg bg-primary-50 px-0.5 py-1 dark:bg-primary-950/40' : ''
-                      }`}
-                    >
-                      <div className="flex h-full w-full items-end justify-center gap-1">
-                        <div className="flex w-3 flex-col items-center justify-end">
-                          <span className="mb-0.5 text-[10px] font-semibold text-primary-600">
-                            {esp}
-                          </span>
-                          <div
-                            className="flex w-3 rounded-t bg-primary-500 transition-all"
-                            style={{
-                              height: `${(esp / frequenciaSemanal.maximo) * 100}%`,
-                              minHeight: esp ? 3 : 0
-                            }}
-                            title={`Esperado (${ROTULOS[ORDEM.indexOf(diaIdx)]}): ${esp}`}
-                          />
-                        </div>
-                        <div className="flex w-3 flex-col items-center justify-end">
-                          <span className="mb-0.5 text-[10px] font-semibold text-emerald-600">
-                            {real}
-                          </span>
-                          <div
-                            className="flex w-3 rounded-t bg-yellow-400 transition-all"
-                            style={{
-                              height: `${(real / frequenciaSemanal.maximo) * 100}%`,
-                              minHeight: real ? 3 : 0
-                            }}
-                            title={`Realizado (${ROTULOS[ORDEM.indexOf(diaIdx)]}): ${real}`}
-                          />
-                        </div>
-                      </div>
-                      <span
-                        className={`text-[10px] ${
-                          isHoje
-                            ? 'font-bold text-primary-700 dark:text-primary-300'
-                            : 'text-zinc-400 dark:text-zinc-500'
-                        }`}
-                      >
-                        {ROTULOS[ORDEM.indexOf(diaIdx)]}
-                      </span>
-                    </div>
-                  )
-                })}
+          {/* ---------- Frequência por período (Semanal/Mensal/Anual) ---------- */}
+          <section className={`${VIDRO} p-5`}>
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h2 className="text-xs font-medium uppercase tracking-wide text-white/60">
+                Frequência
+              </h2>
+              <div className="flex rounded-full border border-white/15 bg-white/5 p-0.5 text-[11px] font-bold">
+                {(
+                  [
+                    ['semanal', 'Semanal'],
+                    ['mensal', 'Mensal'],
+                    ['anual', 'Anual']
+                  ] as const
+                ).map(([chave, rotulo]) => (
+                  <button
+                    key={chave}
+                    onClick={() => setPeriodoFrequencia(chave)}
+                    className={`rounded-full px-3 py-1 transition ${
+                      periodoFrequencia === chave
+                        ? 'bg-primary-500 text-white shadow'
+                        : 'text-white/60 hover:text-white'
+                    }`}
+                  >
+                    {rotulo}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {carregandoHistorico ? (
+              <div className="flex justify-center py-10 text-primary-400">
+                <Loader2 className="h-6 w-6 animate-spin" />
               </div>
             ) : (
-              <div className="py-8 text-white/60">
-                Nenhum treino cadastrado para esta frequência
+              <div>
+                <p className="mb-2 text-center text-xs font-semibold text-white/70">
+                  {periodoFrequencia === 'semanal' && (
+                    <>
+                      {frequenciaPeriodo.semanal.total} treino(s) nesta semana
+                    </>
+                  )}
+                  {periodoFrequencia === 'mensal' && (
+                    <>
+                      {frequenciaPeriodo.mensal.total} treino(s) neste mês
+                    </>
+                  )}
+                  {periodoFrequencia === 'anual' && (
+                    <>
+                      {frequenciaPeriodo.anual.total} treino(s) neste ano
+                    </>
+                  )}
+                </p>
+
+                {/* ---------- Semanal ---------- */}
+                {periodoFrequencia === 'semanal' && (
+                  <div className="flex h-40 items-end gap-1.5">
+                    {ORDEM.map((diaIdx) => {
+                      const esp = frequenciaPeriodo.semanal.esperadosPorDia[diaIdx]
+                      const real = frequenciaPeriodo.semanal.realizadosPorDia[diaIdx]
+                      const isHoje = diaIdx === new Date().getDay()
+                      return (
+                        <div
+                          key={diaIdx}
+                          className={`flex flex-1 flex-col items-center gap-1 ${
+                            isHoje
+                              ? 'rounded-lg bg-primary-500/20 px-0.5 py-1'
+                              : ''
+                          }`}
+                        >
+                          <div className="flex h-full w-full items-end justify-center gap-1">
+                            <div className="flex w-3 flex-col items-center justify-end">
+                              <span className="mb-0.5 text-[10px] font-semibold text-primary-300">
+                                {esp || ''}
+                              </span>
+                              <div
+                                className="w-full rounded-t bg-primary-500/70 transition-all"
+                                style={{
+                                  height: `${(esp / frequenciaPeriodo.semanal.maximo) * 100}%`,
+                                  minHeight: esp ? 3 : 0
+                                }}
+                                title={`Esperado (${ROTULOS[ORDEM.indexOf(diaIdx)]}): ${esp}`}
+                              />
+                            </div>
+                            <div className="flex w-3 flex-col items-center justify-end">
+                              <span className="mb-0.5 text-[10px] font-semibold text-yellow-300">
+                                {real || ''}
+                              </span>
+                              <div
+                                className="w-full rounded-t bg-yellow-400 transition-all"
+                                style={{
+                                  height: `${(real / frequenciaPeriodo.semanal.maximo) * 100}%`,
+                                  minHeight: real ? 3 : 0
+                                }}
+                                title={`Realizado (${ROTULOS[ORDEM.indexOf(diaIdx)]}): ${real}`}
+                              />
+                            </div>
+                          </div>
+                          <span
+                            className={`text-[10px] ${
+                              isHoje
+                                ? 'font-bold text-primary-300'
+                                : 'text-white/50'
+                            }`}
+                          >
+                            {ROTULOS[ORDEM.indexOf(diaIdx)]}
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+
+                {/* ---------- Mensal ---------- */}
+                {periodoFrequencia === 'mensal' && (
+                  <div className="flex h-40 items-end gap-1.5">
+                    {frequenciaPeriodo.mensal.realizadosPorSemana.map((v, i) => (
+                      <div
+                        key={i}
+                        className="flex flex-1 flex-col items-center gap-1"
+                      >
+                        <div className="flex w-full flex-1 items-end justify-center">
+                          <div className="flex w-8 flex-col items-center justify-end">
+                            <span className="mb-0.5 text-[10px] font-semibold text-yellow-300">
+                              {v || ''}
+                            </span>
+                            <div
+                              className={`w-full rounded-t transition-all ${
+                                v >= 2 ? 'bg-emerald-400' : 'bg-yellow-400'
+                              }`}
+                              style={{
+                                height: `${(v / frequenciaPeriodo.mensal.maximo) * 100}%`,
+                                minHeight: v ? 4 : 0
+                              }}
+                            />
+                          </div>
+                        </div>
+                        <span className="text-[10px] text-white/50">
+                          Sem {i + 1}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* ---------- Anual ---------- */}
+                {periodoFrequencia === 'anual' && (
+                  <div className="flex h-40 items-end gap-1">
+                    {frequenciaPeriodo.anual.realizadosPorMes.map((v, i) => (
+                      <div
+                        key={i}
+                        className="flex flex-1 flex-col items-center gap-1"
+                      >
+                        <div className="flex w-full flex-1 items-end justify-center">
+                          <div
+                            className="w-full max-w-4 rounded-t bg-yellow-400 transition-all"
+                            style={{
+                              height: `${(v / frequenciaPeriodo.anual.maximo) * 100}%`,
+                              minHeight: v ? 3 : 0
+                            }}
+                            title={`${MESES_ROTULO[i]}: ${v} treino(s)`}
+                          />
+                        </div>
+                        <span className="text-[9px] text-white/50">
+                          {MESES_ROTULO[i]}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <p className="mt-3 rounded-xl border border-primary-500/30 bg-primary-500/10 px-3 py-2 text-center text-[11px] leading-snug text-primary-200">
+              Consistência é o segredo: cada treino concluído conta para a sua
+              evolução. Continue assim! 💪
+            </p>
+          </section>
+
+          {/* ---------- Evolução do PSE ---------- */}
+          <section className={`${VIDRO} p-5`}>
+            <div className="mb-3 flex items-center gap-2">
+              <TrendingUp className="h-4 w-4 text-primary-400" />
+              <h2 className="text-xs font-medium uppercase tracking-wide text-white/60">
+                Evolução do PSE
+              </h2>
+            </div>
+            {pseSerie ? (
+              <div>
+                <div className="mb-3 flex items-center justify-center gap-6 text-center">
+                  <div>
+                    <p className="text-lg font-extrabold text-white">
+                      {pseSerie.media.toFixed(1)}
+                    </p>
+                    <p className="text-[10px] text-white/50">
+                      Média de esforço
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-lg font-extrabold text-white">
+                      {pseSerie.pontos[pseSerie.pontos.length - 1].pse}/10
+                    </p>
+                    <p className="text-[10px] text-white/50">Último treino</p>
+                  </div>
+                  <div>
+                    <p className="text-lg font-extrabold text-white">
+                      {pseSerie.pontos.length}
+                    </p>
+                    <p className="text-[10px] text-white/50">Treinos na série</p>
+                  </div>
+                </div>
+
+                {/* Gráfico de linha SVG */}
+                <GraficoPse pontos={pseSerie.pontos} />
+              </div>
+            ) : (
+              <div className="py-10 text-center text-white/60">
+                <TrendingUp className="mx-auto mb-2 h-8 w-8 opacity-40" />
+                <p className="text-sm font-semibold text-white/80">
+                  Nenhum treino concluído ainda
+                </p>
+                <p className="mt-1 text-xs text-white/50">
+                  Ao finalizar um treino com o cronômetro, sua nota de esforço
+                  (PSE) aparecerá aqui.
+                </p>
               </div>
             )}
           </section>
