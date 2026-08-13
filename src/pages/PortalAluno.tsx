@@ -19,9 +19,12 @@ import {
   LogOut,
   Phone,
   PlayCircle,
+  Pause,
   User,
   HeartPulse,
-  CalendarDays
+  CalendarDays,
+  Timer,
+  X
 } from 'lucide-react'
 import fundoAcademia from '../assets/fundo.png'
 
@@ -152,6 +155,14 @@ export default function PortalAluno() {
   const [macrociclo, setMacrociclo] = useState<any[]>([])
   const [verMacrociclo, setVerMacrociclo] = useState(false)
 
+  // ---------- Cronômetro de Treino + Feedback (historico_treinos) ----------
+  const [cronometroAtivo, setCronometroAtivo] = useState(false)
+  const [tempoDecorrido, setTempoDecorrido] = useState(0)
+  const [modalFeedback, setModalFeedback] = useState(false)
+  const [pse, setPse] = useState(5)
+  const [observacoes, setObservacoes] = useState('')
+  const [salvandoFeedback, setSalvandoFeedback] = useState(false)
+
   const aluno = sessao?.aluno ?? null
 
   // ===================================================================
@@ -208,6 +219,9 @@ export default function PortalAluno() {
     setErro('')
     setJaCheckinHoje(false)
     setCheckinSucesso(false)
+    setCronometroAtivo(false)
+    setTempoDecorrido(0)
+    setModalFeedback(false)
     setTreinos([])
     toast('Sessão encerrada. Até logo!')
   }
@@ -377,6 +391,63 @@ export default function PortalAluno() {
     } finally {
       setRegistrando(false)
     }
+  }
+
+    // ----- Cronômetro: incrementa 1s por segundo enquanto ativo -----
+  useEffect(() => {
+    if (!cronometroAtivo) return
+    const timer = setInterval(() => {
+      setTempoDecorrido((t) => t + 1)
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [cronometroAtivo])
+
+  // Formata segundos como HH:MM:SS (ou MM:SS abaixo de 1h)
+  const formatarTempo = (total: number) => {
+    const h = Math.floor(total / 3600)
+    const m = Math.floor((total % 3600) / 60)
+    const s = total % 60
+    const dois = (n: number) => String(n).padStart(2, '0')
+    return h > 0 ? `${dois(h)}:${dois(m)}:${dois(s)}` : `${dois(m)}:${dois(s)}`
+  }
+
+  // Abre o modal de feedback ao clicar em "Concluir Treino"
+  const abrirFeedback = () => {
+    setPse(5)
+    setObservacoes('')
+    setModalFeedback(true)
+  }
+
+  // Salva o feedback na tabela historico_treinos e encerra o cronômetro
+  const salvarFeedback = async () => {
+    if (!aluno) return
+    setSalvandoFeedback(true)
+    try {
+      const { error } = await supabase
+        .from('historico_treinos')
+        .insert({
+          aluno_id: aluno.id,
+          data: new Date().toISOString(),
+          tempo_segundos: tempoDecorrido,
+          pse,
+          observacoes: observacoes.trim() || null
+        })
+      if (error) throw error
+      toast('Treino concluído com sucesso! 💪')
+      setCronometroAtivo(false)
+      setTempoDecorrido(0)
+      setModalFeedback(false)
+    } catch (e: any) {
+      toast(e?.message || 'Erro ao salvar o treino.', 'erro')
+    } finally {
+      setSalvandoFeedback(false)
+    }
+  }
+
+  // Alterna o cronômetro (iniciar/pausar)
+  const alternarCronometro = () => {
+    if (!aluno) return
+    setCronometroAtivo((a) => !a)
   }
 
   const dataHoje = new Date().toLocaleDateString('pt-BR', {
@@ -555,6 +626,49 @@ export default function PortalAluno() {
                     : 'Fazer Check-in Agora'}
               </button>
             )}
+          </section>
+
+          {/* ---------- Cronômetro de Treino ---------- */}
+          <section className={`${VIDRO} p-5 text-center`}>
+            <h2 className="text-xs font-medium uppercase tracking-wide text-white/60 mb-3">Cronômetro de Treino</h2>
+            <p className="text-5xl font-extrabold tabular-nums text-white">
+              {formatarTempo(tempoDecorrido)}
+            </p>
+            <p className="mt-1 text-xs text-white/50">
+              {cronometroAtivo ? 'Treinando... keep it up! 🔥' : tempoDecorrido > 0 ? 'Pausado — continue quando quiser' : 'Inicie quando começar a treinar'}
+            </p>
+            <div className="mt-4 flex gap-2">
+              <button
+                onClick={alternarCronometro}
+                className={`flex flex-1 items-center justify-center gap-2 rounded-2xl py-3.5 text-sm font-extrabold text-white shadow-lg transition active:scale-[0.99] ${
+                  cronometroAtivo
+                    ? 'bg-amber-500 hover:bg-amber-600 shadow-amber-900/40'
+                    : 'bg-gradient-to-r from-primary-500 to-primary-700 shadow-primary-900/50 hover:brightness-105'
+                }`}
+              >
+                {cronometroAtivo ? (
+                  <>
+                    <Pause className="h-4 w-4" /> Pausar
+                  </>
+                ) : tempoDecorrido > 0 ? (
+                  <>
+                    <PlayCircle className="h-4 w-4" /> Continuar
+                  </>
+                ) : (
+                  <>
+                    <PlayCircle className="h-4 w-4" /> Iniciar
+                  </>
+                )}
+              </button>
+              <button
+                onClick={abrirFeedback}
+                disabled={tempoDecorrido === 0 || salvandoFeedback}
+                className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-emerald-500 py-3.5 text-sm font-extrabold text-white shadow-lg shadow-emerald-900/40 transition hover:bg-emerald-600 active:scale-[0.99] disabled:opacity-40 disabled:hover:bg-emerald-500"
+              >
+                <CheckCircle2 className="h-4 w-4" />
+                Concluir Treino
+              </button>
+            </div>
           </section>
 
           {/* ---------- Frequência Semanal ---------- */}
@@ -852,6 +966,112 @@ export default function PortalAluno() {
             )}
           </section>
         </main>
+
+        {/* ---------- Modal de Feedback (Concluir Treino) ---------- */}
+        {modalFeedback && (
+          <div
+            className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-0 backdrop-blur-sm sm:items-center sm:p-4"
+            onClick={() => setModalFeedback(false)}
+          >
+            <div
+              className="flex max-h-[92vh] w-full max-w-md flex-col overflow-hidden rounded-t-2xl border border-white/10 bg-[#161616] shadow-2xl sm:rounded-2xl"
+              onClick={(e) => e.stopPropagation()}
+              role="dialog"
+              aria-modal="true"
+            >
+              <div className="flex items-center justify-between border-b border-white/10 px-5 py-3.5">
+                <h2 className="text-base font-bold text-white">Concluir Treino</h2>
+                <button
+                  onClick={() => setModalFeedback(false)}
+                  className="rounded-lg p-1.5 text-white/50 transition hover:bg-white/10 hover:text-white"
+                  aria-label="Fechar"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <div className="space-y-5 overflow-y-auto p-5">
+                {/* Tempo total da sessão */}
+                <div className="flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+                  <span className="flex items-center gap-2 text-sm font-semibold text-white/80">
+                    <Timer className="h-4 w-4 text-primary-400" />
+                    Tempo da sessão
+                  </span>
+                  <span className="text-lg font-extrabold tabular-nums text-white">
+                    {formatarTempo(tempoDecorrido)}
+                  </span>
+                </div>
+
+                {/* PSE (0-10) */}
+                <div>
+                  <div className="mb-2 flex items-center justify-between">
+                    <label className="text-sm font-bold text-white">
+                      Esforço da sessão (PSE)
+                    </label>
+                    <span className="rounded-full bg-primary-500 px-3 py-0.5 text-sm font-extrabold text-white">
+                      {pse}/10
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="10"
+                    step="1"
+                    value={pse}
+                    onChange={(e) => setPse(Number(e.target.value))}
+                    className="w-full accent-primary-500"
+                  />
+                  <p className="mt-1.5 text-[11px] leading-relaxed text-white/50">
+                    {pse <= 2
+                      ? 'Muito leve — aquecimento ou descanso.'
+                      : pse <= 4
+                        ? 'Leve — respiração controlada, conversa tranquila.'
+                        : pse <= 6
+                          ? 'Moderado — esforço perceptível, conversa difícil.'
+                          : pse <= 8
+                            ? 'Intenso — respiração ofegante, poucas palavras.'
+                            : 'Máximo — esforço total, quase sem fôlego.'}
+                  </p>
+                </div>
+
+                {/* Observações */}
+                <div>
+                  <label className="mb-1.5 block text-sm font-bold text-white">
+                    Observações / Comentários
+                  </label>
+                  <textarea
+                    value={observacoes}
+                    onChange={(e) => setObservacoes(e.target.value)}
+                    rows={3}
+                    placeholder="Como foi o treino de hoje? Algum exercício difícil, dor, ou algo que queira contar ao seu treinador..."
+                    className="w-full resize-none rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-primary-400 focus:ring-2 focus:ring-primary-500/30"
+                  />
+                </div>
+
+                <div className="flex gap-2 pt-1">
+                  <button
+                    onClick={() => setModalFeedback(false)}
+                    className="flex-1 rounded-xl border border-white/15 bg-white/5 py-3 text-sm font-bold text-white/70 transition hover:bg-white/10"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={salvarFeedback}
+                    disabled={salvandoFeedback}
+                    className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-500 py-3 text-sm font-extrabold text-white shadow-lg shadow-emerald-900/40 transition hover:bg-emerald-600 active:scale-[0.99] disabled:opacity-60"
+                  >
+                    {salvandoFeedback ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <CheckCircle2 className="h-4 w-4" />
+                    )}
+                    {salvandoFeedback ? 'Salvando...' : 'Salvar e concluir'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ---------- Rodapé dinâmico ---------- */}
         <footer className="mx-auto w-full max-w-md px-4 pb-8 pt-6 text-center">

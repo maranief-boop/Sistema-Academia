@@ -130,6 +130,23 @@ create index if not exists checkins_data_idx on public.checkins (data_hora desc)
 create index if not exists checkins_aluno_idx on public.checkins (aluno_id, data_hora desc);
 
 -- ---------------------------------------------------------------------
+-- Tabela: historico_treinos (feedback do aluno pós-treino)
+-- Registra a duração (cronômetro), o PSE (Percepção Subjetiva de Esforço,
+-- 0-10) e observações livres de cada sessão concluída pelo aluno.
+-- ---------------------------------------------------------------------
+create table if not exists public.historico_treinos (
+  id             uuid primary key default gen_random_uuid(),
+  aluno_id       uuid not null references public.alunos(id) on delete cascade,
+  data           timestamptz not null default now(),
+  tempo_segundos integer,
+  pse            integer check (pse between 0 and 10),
+  observacoes    text,
+  created_at     timestamptz not null default now()
+);
+
+create index if not exists historico_treinos_aluno_idx on public.historico_treinos (aluno_id, data desc);
+
+-- ---------------------------------------------------------------------
 -- Tabela: configuracoes (identidade visual White-Label — linha única id = 1)
 -- ---------------------------------------------------------------------
 create table if not exists public.configuracoes (
@@ -194,9 +211,10 @@ create table if not exists public.macrociclo (
 -- os dados "sumirem" da tela. Desligar o RLS evita esse comportamento.
 alter table public.alunos disable row level security;
 alter table public.leads disable row level security;
+alter table public.historico_treinos disable row level security;
 
 -- IMPORTANTE: recarrega o cache de schema do PostgREST para que as colunas
 -- e tabelas novas (treinos.dias_semana, treinos.restricoes, exercicios_base,
--- leads, macrociclo) fiquem disponíveis IMEDIATAMENTE via API.
+-- leads, macrociclo, historico_treinos) fiquem disponíveis IMEDIATAMENTE via API.
 -- (Sem isso, as chamadas REST podem responder 400 "column does not exist".)
 notify pgrst, 'reload schema';

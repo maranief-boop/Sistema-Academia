@@ -1,48 +1,46 @@
 ## Objective
-- Corrigir dois bugs críticos já resolvidos + quatro ajustes novos de lógica + um novo feature: (1) dias da semana dos blocos de treino não persistiam ao recarregar (corrigido com estado `treinosAluno` guardando quando o load termina); (2) cards de receita em R$ 0,00 (corrigido ao adicionar `data_ultimo_pagamento`/`forma_pagamento` ao fallback select de `useAlunos`); (3) cálculo de atraso agora respeita primariamente o `status_pagamento` do cadastro; (4) card `totalReceber` agora soma apenas alunos com vencimento em aberto no mês corrente (filtrado por `data_vencimento` no formato `YYYY-MM`); (5) **lógica de receita e total a receber unificada com o Dashboard** — agora usa exatamente a mesma regra: soma `plano_valor` de todos os alunos com `status_pagamento !== 'inadimplente'`, independentemente de terem `data_ultimo_pagamento` preenchido ou não; (6) **Novo feature: gráfico de frequência semanal no Portal do Aluno** — card "Frequência Semanal" com barras paralelas (esperado vs realizado) de Segunda a Domingo, cruzando os treinos do aluno (`treinos.dias_semana`) com seus check-ins (`checkins.data_hora`), permitindo que o aluno acompanhe seu próprio histórico e assiduidade.
+- Correções anteriores (bugs de Treinos, Financeiro R$0, atraso/status, totalReceber, unificação com Dashboard) + novos features: (6) **gráfico de frequência semanal no Portal do Aluno** — card "Frequência Semanal" com barras paralelas (esperado vs realizado) de Segunda a Domingo, cruzando `treinos.dias_semana` com `checkins.data_hora`; (7) **Cronômetro + Feedback pós-treino (PSE)** — nova tabela `historico_treinos` (id, aluno_id, data, tempo_segundos, pse 0-10, observacoes); cronômetro interativo + botão "Concluir Treino" + modal de feedback (PSE com legenda, observações, salvar no Supabase, toast "Treino concluído com sucesso!") no Portal do Aluno; e seção "Feedback dos Treinos (PSE)" no painel admin (Check-ins) para monitorar intensidade e satisfação por aluno, com filtro por aluno, badges coloridas de PSE, duração formatada e observações.
 
 ## Important Details
 - Projeto: PWA React + Tailwind + Supabase em `D:\Desktop\Sistema Academia`. `npm.cmd` (PowerShell bloqueia `npm.ps1`). HashRouter, `base: './'`, Supabase URL `https://gokzwuhpvjgmrdnpmwcc.supabase.co`.
-- `supabase/schema.sql` executar no SQL Editor do Supabase; termina com `NOTIFY pgrst, 'reload schema';`. RLS desativado para `alunos`/`leads`.
-- `useAlunos.js` fallback select inclui `data_ultimo_pagamento, forma_pagamento` (linha 25) — sem isso, receita = 0 e forma_pagamento sumia.
-- Treinos: estado `treinosAluno` setado após `carregarTreinos` resolver; init effect gated por `treinosAluno === alunoId`. Dias A/B/C/D agora persistem no reload.
-- `atraso`/vencido: agora verifica `status_pagamento !== 'em_dia'` antes de calcular dias de atraso. Alunos 'Em dia' nunca mostram atraso.
-- `totalReceber`: antes filtrado por vencimento no mês corrente (`data_vencimento` em `YYYY-MM`). Agora usa regra unificada com Dashboard.
-- **Receita cards (hoje/semana/mês/ano)**: lógica unificada — antes dependia de `data_ultimo_pagamento` no período (0 para alunos antigos/sem baixa). Agora soma `plano_valor` de todos os alunos `status_pagamento !== 'inadimplente'`, garantindo valores preenchidos e consistentes com o Dashboard (R$ 395,00 pattern). Inclui alunos manuais e leads convertidos do CRM.
-- **Novo: Frequência Semanal no Portal do Aluno** (`src/pages/PortalAluno.tsx`): card "Frequência Semanal" com barras paralhas (esperado em primary-500, realizado em yellow-400) de Segunda a Domingo. Calcula `esperadosPorDia` a partir dos `treinos.dias_semana` do aluno e `realizadosPorDia` a partir dos `checkins.data_hora`. Mostra KPI visual de adesão semanal; quando não há treinos cadastrados, exibe mensagem alternativa. Build: `npm.cmd run build` ✓.
-- Checkins: Realizado = `bg-yellow-400`, Esperado = `bg-primary-500`, KPIs, ausentes 7+ dias.
-- Crm: SVG line/área chart, card Aula Experimental, auto-conversão Lead→Aluno (`converterLeadEmAluno` + botão no modal).
-- Dashboard: cards clicáveis, ícone montar treino = Dumbbell.
+- `supabase/schema.sql` executar no SQL Editor do Supabase; termina com `NOTIFY pgrst, 'reload schema';`. RLS desativado para `alunos`/`leads`/`historico_treinos`.
+- **Nova tabela `historico_treinos`** (schema.sql): `id uuid PK default gen_random_uuid()`, `aluno_id uuid references alunos(id) on delete cascade`, `data timestamptz default now()`, `tempo_segundos integer`, `pse integer check (pse between 0 and 10)`, `observacoes text`, `created_at`; índice `historico_treinos_aluno_idx (aluno_id, data desc)`; `disable row level security`.
+- **Portal do Aluno** (`src/pages/PortalAluno.tsx`): cronômetro com `useEffect` (intervalo 1s), `formatarTempo` (HH:MM:SS ou MM:SS), botões Iniciar/Pausar/Continuar + "Concluir Treino" (verde, só ativo com tempo > 0). Modal de feedback custom (glassmorphism `#161616`): mostra tempo da sessão, slider PSE 0-10 com legenda contextual de intensidade (Muito leve/Leve/Moderado/Intenso/Máximo), textarea de observações, botão "Salvar e concluir" → `supabase.from('historico_treinos').insert(...)` → toast "Treino concluído com sucesso! 💪", reset do cronômetro. Logout reseta cronômetro/feedback. Ícones novos: `Pause`, `Timer`, `X`.
+- **Painel Admin** (`src/pages/Checkins.jsx`): seção "Feedback dos Treinos (PSE)" — busca `historico_treinos` (limit 200, order data desc), filtro por aluno (Select), badge colorida de PSE (sky≤2/emerald≤4/amber≤6/orange≤8/red≤9-10), duração formatada (`formatarDuracao`: "1h 23min"/"45min 10s"/"10s"), observações com ícone MessageSquare. Importa `supabase`, `useCallback`, `Gauge`, `Timer`, `MessageSquare`, `Select`.
+- `useAlunos.js` fallback select inclui `data_ultimo_pagamento, forma_pagamento` (linha 25).
+- Treinos: estado `treinosAluno` gated por `treinosAluno === alunoId` na init effect. Dias A/B/C/D persistem no reload.
+- `atraso`/vencido: verifica `status_pagamento !== 'em_dia'`.
+- Receita e totalReceber: regra unificada com Dashboard — soma `plano_valor` de alunos `status_pagamento !== 'inadimplente'` (inclui manuais e leads convertidos, ignora data_ultimo_pagamento).
+- Build validado (`npm.cmd run build` ✓).
 
 ## Work State
 ### Completed
-- **BUG 1 (Treinos):** init effect travava `fichaInicializada` com `treinos` vazio → dias sumiam ao recarregar. Corrigido com `treinosAluno` state após `carregarTreinos` .then, guard `treinosAluno === alunoId` na init effect. Dias dos cards A/B/C/D agora persistem.
-- **BUG 2 (Financeiro R$0):** fallback select de `useAlunos` omitia `data_ultimo_pagamento`/`forma_pagamento` → quando `select('*')` falhava, receita = 0 e forma de pagamento vazia. Adicionadas ambas ao fallback (useAlunos.js:25). Cards de receita agora somam `plano_valor` corretamente.
-- **BUG 3 (atraso sobrescreve status):** lógica `const atraso = aluno.data_vencimento ? diasDesde(...) : null`/`vencido` agora testa `status_pagamento !== 'em_dia'` antes. Alunos com select 'Em dia' nunca mostram atraso.
-- **BUG 4 (totalReceber):** card `totalReceber` filtrado por vencimento no mês corrente (`data_vencimento` em `YYYY-MM`). Agora usa regra unificada com Dashboard.
-- **BUG 5 (Receita cards dessincronizados):** cards superiores de receita (hoje/semana/mês/ano) e `totalReceber` agora usam regra idêntica ao Dashboard: soma `plano_valor` de alunos com `status_pagamento !== 'inadimplente'`. Antes dependiam de `data_ultimo_pagamento` no período, deixando alunos manuais/convertidos do CRM de fora. Agora todos são incluídos.
-- **FEATURE (Portal Aluno):** card "Frequência Semanal" adicionado em `src/pages/PortalAluno.tsx` (após check-in, antes da Ficha de Treino). Usa `useCheckins` hook, calcula `esperadosPorDia` a partir de `treinos.dias_semana` e `realizadosPorDia` a partir de `checkins.data_hora`. Renderiza barras paralelas (primary-500 esperado, yellow-400 realizado) de Segunda a Domingo (`ORDEM = [1,2,3,4,5,6,0]`, `ROTULOS = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom']`). Quando não há treinos cadastrados, exibe mensagem alternativa. Build validado.
-- `forma_pagamento` added to schema + fallback select.
+- **BUG 1 (Treinos):** init effect travava `fichaInicializada` com `treinos` vazio → dias sumiam. Corrigido com `treinosAluno` state.
+- **BUG 2 (Financeiro R$0):** fallback select de `useAlunos` adicionado `data_ultimo_pagamento`/`forma_pagamento`.
+- **BUG 3 (atraso sobrescreve status):** `atraso`/`vencido` testam `status_pagamento !== 'em_dia'`.
+- **BUG 4/5 (totalReceber + receita cards):** regra unificada com Dashboard.
+- **FEATURE (Portal Aluno - Frequência Semanal):** card com barras esperado/realizado Seg-Dom (ORDEM [1,2,3,4,5,6,0], ROTULOS).
+- **FEATURE (historico_treinos + cronômetro + feedback):** tabela nova no schema; cronômetro + "Concluir Treino" + modal PSE/observações no Portal; seção admin "Feedback dos Treinos (PSE)" no Checkins.jsx com filtro por aluno, badges de PSE, duração e observações.
+- `forma_pagamento` adicionada ao schema + fallback select.
 - Checkins: gráfico Esperado/Realizado (yellow-400), KPIs, ausentes 7+ dias.
-- Crm: SVG line/área chart, card Aula Experimental, auto-conversão lead→aluno, converter button modal.
-- Dashboard: cards clicáveis, ícone montar treino = Dumbbell.
+- Crm: SVG line/área chart, card Aula Experimental, auto-conversão lead→aluno.
+- Dashboard: cards clicáveis.
 
 ### Active
 - (none)
 
 ### Blocked
-- (none) — porém `schema.sql` precisa ser executado no Supabase para `select('*')` deixar de cair no fallback e para as novas colunas/índices surtirem efeito.
+- (none) — porém `schema.sql` precisa ser executado no Supabase (inclui a nova tabela `historico_treinos`) + `NOTIFY pgrst, 'reload schema';` para que as chamadas REST funcionem e a tabela fique disponível.
 
 ## Next Move
-- Opcional: rodar `supabase/schema.sql` no Supabase + `NOTIFY pgrst, 'reload schema';` para que `select('*')` funcione plenamente (evita o caminho de fallback, embora o app funcione mesmo sem ele graças ao fallback resiliente).
-- Testar manualmente: logar no Portal do Aluno e conferir o card "Frequência Semanal" com barras de Segunda a Domingo; verificar que o esperado vem dos treinos do aluno e o realizado vem dos check-ins; confirmar que cards de receita do Financeiro e totalReceber seguem a regra unificada com Dashboard.
+- Opcional: rodar `supabase/schema.sql` no Supabase + `NOTIFY pgrst, 'reload schema';` (essencial para a nova tabela `historico_treinos`).
+- Testar manualmente: no Portal do Aluno, iniciar cronômetro, concluir treino, preencher PSE/observações e salvar; conferir toast de sucesso e seção "Feedback dos Treinos (PSE)" no painel admin (Check-ins) com os dados salvos, filtro por aluno e badges de PSE.
 
 ## Relevant Files
-- `src/hooks/useAlunos.js`: fallback select agora inclui `data_ultimo_pagamento, forma_pagamento` (linha 25).
-- `src/pages/Treinos.jsx`: load effect seta `treinosAluno` após `carregarTreinos` resolver; init effect gated por `treinosAluno === alunoId`.
-- `src/pages/Financeiro.jsx`: **receita** useMemo (linhas ~72-89) agora soma `plano_valor` de alunos com `status_pagamento !== 'inadimplente'` para os quatro períodos; **resumo** useMemo (linhas ~92-113) `totalReceber` usa mesma regra unificada; lógica `atraso`/`vencido` testa `status_pagamento !== 'em_dia'` (linhas ~283-284).
-- `src/hooks/useTreinos.js`: `salvarDia` (upsert com `dias_semana`), `carregarTreinos` (`select('*')`).
-- `supabase/schema.sql`: `treinos` (dia_semana/dias_semana/unique index); `alunos` (data_ultimo_pagamento, forma_pagamento); disable RLS.
-- `src/pages/PortalAluno.tsx`: **Novo** card "Frequência Semanal" (linhas após check-in, antes da Ficha de Treino) — usa `useCheckins`, `useMemo` com `ORDEM`/`ROTULOS`/`DIAS_NORMA`/`parseDiasSemana`, e renderiza barras paralelas esperado vs realizado.
-- `src/hooks/useCheckins.js`: hook existente, agora importado no PortalAluno.
-- `src/pages/Checkins.jsx`, `src/pages/Crm.jsx`, `src/utils/leads.js` (já concluídos em turnos anteriores).
+- `supabase/schema.sql`: **nova tabela `historico_treinos`** + índice + disable RLS; NOTIFY reload.
+- `src/pages/PortalAluno.tsx`: cronômetro (useEffect intervalo 1s, `formatarTempo`, botões Iniciar/Pausar/Continuar + "Concluir Treino"), modal de feedback (slider PSE 0-10 com legenda, textarea observações, `salvarFeedback` → insert em `historico_treinos`, toast sucesso), reset no logout; ícones `Pause`/`Timer`/`X`.
+- `src/pages/Checkins.jsx`: seção "Feedback dos Treinos (PSE)" — fetch `historico_treinos`, filtro por aluno, badges coloridas PSE, `formatarDuracao`, observações; imports `supabase`, `useCallback`, `Gauge`/`Timer`/`MessageSquare`, `Select`.
+- `src/hooks/useAlunos.js`: fallback select com `data_ultimo_pagamento, forma_pagamento` (linha 25).
+- `src/pages/Treinos.jsx`: `treinosAluno` gated init effect.
+- `src/pages/Financeiro.jsx`: receita/totalReceber unificados com Dashboard; `atraso`/`vencido` por status.
+- `src/pages/Crm.jsx`, `src/utils/leads.js`, `src/pages/Checkins.jsx` (frequência) — concluídos em turnos anteriores.

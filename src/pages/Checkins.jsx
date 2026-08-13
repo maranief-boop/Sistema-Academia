@@ -5,7 +5,7 @@
 //   comparar "Alunos Esperados" vs "Check-ins Realizados" por dia da semana
 // - Indicadores de adesão geral e destaque para alunos ausentes há dias
 // =====================================================================
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   CalendarCheck,
@@ -18,14 +18,18 @@ import {
   BarChart3,
   Target,
   TrendingUp,
-  Activity
+  Activity,
+  Gauge,
+  Timer,
+  MessageSquare
 } from 'lucide-react'
+import { supabase } from '../lib/supabase'
 import { useAlunos } from '../hooks/useAlunos'
 import { useCheckins } from '../hooks/useCheckins'
 import { useTreinos } from '../hooks/useTreinos'
 import { useToast } from '../components/Toast'
 import { Modal } from '../components/Modal'
-import { Card, Input, EstadoVazio, Spinner, Button } from '../components/ui'
+import { Card, Input, EstadoVazio, Spinner, Button, Select } from '../components/ui'
 import {
   formatarDataHora,
   formatarData,
@@ -94,6 +98,61 @@ export default function Checkins() {
     carregarCheckins()
     carregarTodos().then(setTreinosTodos)
   }, [carregarCheckins, carregarTodos])
+
+  // ----- Feedback pós-treino (historico_treinos: PSE + observações) -----
+  const [historicos, setHistoricos] = useState([])
+  const [carregandoHistoricos, setCarregandoHistoricos] = useState(false)
+  const [filtroAlunoHistorico, setFiltroAlunoHistorico] = useState('')
+
+  const carregarHistoricos = useCallback(async () => {
+    setCarregandoHistoricos(true)
+    try {
+      const { data, error } = await supabase
+        .from('historico_treinos')
+        .select('*')
+        .order('data', { ascending: false })
+        .limit(200)
+      if (error) throw error
+      setHistoricos(data || [])
+    } catch (e) {
+      toast(e?.message || 'Erro ao carregar o feedback dos treinos.', 'erro')
+    } finally {
+      setCarregandoHistoricos(false)
+    }
+  }, [toast])
+
+  useEffect(() => {
+    carregarHistoricos()
+  }, [carregarHistoricos])
+
+  // Formata segundos como "1h 23min" ou "45min 10s"
+  const formatarDuracao = (segundos) => {
+    if (segundos == null) return '—'
+    const h = Math.floor(segundos / 3600)
+    const m = Math.floor((segundos % 3600) / 60)
+    const s = segundos % 60
+    if (h > 0) return `${h}h ${m}min`
+    if (m > 0) return `${m}min ${s}s`
+    return `${s}s`
+  }
+
+  // Cor e rótulo do PSE para facilitar a leitura pelo treinador
+  const pseEstilo = (valor) => {
+    if (valor <= 2)
+      return { cor: 'bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300', rotulo: 'Muito leve' }
+    if (valor <= 4)
+      return { cor: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300', rotulo: 'Leve' }
+    if (valor <= 6)
+      return { cor: 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300', rotulo: 'Moderado' }
+    if (valor <= 8)
+      return { cor: 'bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-300', rotulo: 'Intenso' }
+    return { cor: 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300', rotulo: 'Máximo' }
+  }
+
+  const historicosExibidos = useMemo(() => {
+    if (!filtroAlunoHistorico) return historicos
+    return historicos.filter((h) => h.aluno_id === filtroAlunoHistorico)
+  }, [historicos, filtroAlunoHistorico])
 
   // ----- Alunos que não treinam há 7+ dias -----
   const ausentes = useMemo(() => {
@@ -509,6 +568,96 @@ export default function Checkins() {
           )}
         </Card>
       </div>
+
+      {/* ---------- Feedback pós-treino (PSE + observações) ---------- */}
+      <Card className="p-5">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Gauge className="h-4 w-4 text-primary-600" />
+            <h2 className="font-bold text-zinc-900 dark:text-zinc-100">
+              Feedback dos Treinos (PSE)
+            </h2>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Select
+              value={filtroAlunoHistorico}
+              onChange={(e) => setFiltroAlunoHistorico(e.target.value)}
+              className="w-48 text-sm"
+            >
+              <option value="">Todos os alunos</option>
+              {alunos.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.nome}
+                </option>
+              ))}
+            </Select>
+          </div>
+        </div>
+
+        {carregandoHistoricos ? (
+          <div className="flex justify-center py-10">
+            <Spinner />
+          </div>
+        ) : historicosExibidos.length === 0 ? (
+          <EstadoVazio
+            titulo="Nenhum feedback de treino ainda"
+            descricao="Quando os alunos concluírem um treino no Portal do Aluno, o PSE e as observações aparecerão aqui para você acompanhar a intensidade e a satisfação."
+            icone={Gauge}
+          />
+        ) : (
+          <ul className="space-y-2.5">
+            {historicosExibidos.map((h) => {
+              const aluno = alunos.find((a) => a.id === h.aluno_id)
+              const estiloPse = pseEstilo(h.pse)
+              return (
+                <li
+                  key={h.id}
+                  className="flex flex-col gap-2.5 rounded-xl border border-zinc-200 p-3 sm:flex-row sm:items-center dark:border-zinc-800"
+                >
+                  <div className="flex min-w-0 flex-1 items-center gap-3">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-zinc-200 text-xs font-bold text-zinc-600 dark:bg-zinc-700 dark:text-zinc-200">
+                      {iniciais(aluno?.nome || '?')}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="truncate font-semibold text-zinc-900 dark:text-zinc-100">
+                        {aluno?.nome || 'Aluno removido'}
+                      </p>
+                      <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                        {formatarDataHora(h.data)}
+                        {h.tempo_segundos != null && (
+                          <>
+                            <span className="mx-1">·</span>
+                            <Timer className="mr-0.5 inline h-3 w-3" />
+                            {formatarDuracao(h.tempo_segundos)}
+                          </>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex shrink-0 items-center gap-2 sm:flex-col sm:items-end">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`rounded-full px-2.5 py-0.5 text-xs font-extrabold ${estiloPse.cor}`}
+                        title={estiloPse.rotulo}
+                      >
+                        PSE {h.pse}/10 · {estiloPse.rotulo}
+                      </span>
+                    </div>
+                  </div>
+
+                  {h.observacoes && (
+                    <div className="w-full rounded-lg bg-zinc-50 px-3 py-2 text-sm text-zinc-700 sm:max-w-xs dark:bg-zinc-800/60 dark:text-zinc-300">
+                      <MessageSquare className="mr-1 inline h-3.5 w-3.5 text-zinc-400" />
+                      {h.observacoes}
+                    </div>
+                  )}
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </Card>
 
       {/* ---------- Modal de seleção para check-in ---------- */}
       <Modal
