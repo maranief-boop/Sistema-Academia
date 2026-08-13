@@ -30,6 +30,8 @@ import { useTreinos } from '../hooks/useTreinos'
 import { useToast } from '../components/Toast'
 import { Modal } from '../components/Modal'
 import { Card, Input, EstadoVazio, Spinner, Button, Select } from '../components/ui'
+import ModalHistorico from '../components/ModalHistorico'
+import { GraficoBarras, SeletorPeriodo } from '../components/Graficos'
 import {
   formatarDataHora,
   formatarData,
@@ -37,6 +39,12 @@ import {
   iniciais
 } from '../utils/format'
 import { mapaUltimoCheckin } from '../utils/metrics'
+import {
+  MESES_ROTULO,
+  agregarSemanal,
+  agregarMensal,
+  agregarAnual
+} from '../utils/frequencia'
 
 const LIMITE = 7
 
@@ -94,10 +102,40 @@ export default function Checkins() {
   const [registrando, setRegistrando] = useState(null)
   const [treinosTodos, setTreinosTodos] = useState([])
 
+  // ----- Volume de check-ins (gráfico Semanal/Mensal/Anual) -----
+  const [volumeCheckins, setVolumeCheckins] = useState([])
+  const [carregandoVolume, setCarregandoVolume] = useState(false)
+  const [periodoVolume, setPeriodoVolume] = useState('semanal')
+
+  // ----- Histórico detalhado do aluno (modal) -----
+  const [alunoHistorico, setAlunoHistorico] = useState(null)
+
+  // Busca todos os check-ins do ano corrente para o gráfico de volume
+  const carregarVolume = useCallback(async () => {
+    setCarregandoVolume(true)
+    try {
+      const inicioAno = new Date()
+      inicioAno.setMonth(0, 1)
+      inicioAno.setHours(0, 0, 0, 0)
+      const { data, error } = await supabase
+        .from('checkins')
+        .select('id, aluno_id, data_hora')
+        .gte('data_hora', inicioAno.toISOString())
+        .order('data_hora', { ascending: true })
+      if (error) throw error
+      setVolumeCheckins(data || [])
+    } catch (e) {
+      toast(e?.message || 'Erro ao carregar o volume de check-ins.', 'erro')
+    } finally {
+      setCarregandoVolume(false)
+    }
+  }, [toast])
+
   useEffect(() => {
     carregarCheckins()
     carregarTodos().then(setTreinosTodos)
-  }, [carregarCheckins, carregarTodos])
+    carregarVolume()
+  }, [carregarCheckins, carregarTodos, carregarVolume])
 
   // ----- Feedback pós-treino (historico_treinos: PSE + observações) -----
   const [historicos, setHistoricos] = useState([])
@@ -229,6 +267,40 @@ export default function Checkins() {
     ...frequencia.realizadosPorDia,
     1
   )
+
+  // ----- Volume de check-ins por período (Semanal/Mensal/Anual) -----
+  const volumePeriodo = useMemo(
+    () => ({
+      semanal: agregarSemanal(volumeCheckins, (c) => c.data_hora),
+      mensal: agregarMensal(volumeCheckins, (c) => c.data_hora),
+      anual: agregarAnual(volumeCheckins, (c) => c.data_hora)
+    }),
+    [volumeCheckins]
+  )
+
+  const volumeItens = useMemo(() => {
+    if (periodoVolume === 'semanal') {
+      return ORDEM.map((diaIdx, i) => ({
+        rotulo: ROTULOS[i],
+        valor: volumePeriodo.semanal.valores[diaIdx],
+        cor: diaIdx === new Date().getDay() ? 'bg-primary-600' : 'bg-primary-500'
+      }))
+    }
+    if (periodoVolume === 'mensal') {
+      return volumePeriodo.mensal.valores.map((v, i) => ({
+        rotulo: `Sem ${i + 1}`,
+        valor: v,
+        cor: 'bg-emerald-500'
+      }))
+    }
+    return volumePeriodo.anual.valores.map((v, i) => ({
+      rotulo: MESES_ROTULO[i],
+      valor: v,
+      cor: 'bg-primary-500'
+    }))
+  }, [periodoVolume, volumePeriodo])
+
+  const totalVolumePeriodo = volumeItens.reduce((s, i) => s + i.valor, 0)
 
   const alunosBuscados = useMemo(() => {
     const termo = busca.trim().toLowerCase()
@@ -424,6 +496,35 @@ export default function Checkins() {
         )}
       </Card>
 
+      {/* ---------- Volume de check-ins por período (Semanal/Mensal/Anual) ---------- */}
+      <Card className="p-5">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <TrendingUp className="h-4 w-4 text-primary-600" />
+            <h2 className="font-bold text-zinc-900 dark:text-zinc-100">
+              Volume de check-ins
+            </h2>
+          </div>
+          <SeletorPeriodo valor={periodoVolume} onChange={setPeriodoVolume} />
+        </div>
+
+        <p className="mb-3 text-center text-xs font-semibold text-zinc-500 dark:text-zinc-400">
+          {totalVolumePeriodo} check-in(s) no período selecionado
+        </p>
+
+        {carregandoVolume ? (
+          <Spinner />
+        ) : totalVolumePeriodo === 0 ? (
+          <EstadoVazio
+            icone={TrendingUp}
+            titulo="Nenhum check-in no período"
+            descricao="Conforme os alunos fizerem check-in, o volume por período aparecerá aqui."
+          />
+        ) : (
+          <GraficoBarras itens={volumeItens} altura={150} />
+        )}
+      </Card>
+
       {/* ---------- Alerta de evasão (destaque para ausentes) ---------- */}
       {ausentes.length > 0 && (
         <Card className="border-l-4 border-l-red-500 p-4">
@@ -490,9 +591,13 @@ export default function Checkins() {
                       {iniciais(aluno.nome)}
                     </span>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold text-zinc-800 dark:text-zinc-100">
+                      <button
+                        onClick={() => setAlunoHistorico(aluno)}
+                        className="block w-full truncate text-left text-sm font-semibold text-zinc-800 transition hover:text-primary-600 dark:text-zinc-100 dark:hover:text-primary-400"
+                        title="Ver histórico do aluno"
+                      >
                         {aluno.nome}
-                      </p>
+                      </button>
                       <p className="text-xs text-zinc-500 dark:text-zinc-400">
                         {formatarDataHora(c.data_hora)}
                       </p>
@@ -541,9 +646,13 @@ export default function Checkins() {
                       {iniciais(a.nome)}
                     </span>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold text-zinc-800 dark:text-zinc-100">
+                      <button
+                        onClick={() => setAlunoHistorico(a)}
+                        className="block w-full truncate text-left text-sm font-semibold text-zinc-800 transition hover:text-primary-600 dark:text-zinc-100 dark:hover:text-primary-400"
+                        title="Ver histórico do aluno"
+                      >
                         {a.nome}
-                      </p>
+                      </button>
                       <p
                         className={`text-xs ${
                           risco
@@ -619,9 +728,19 @@ export default function Checkins() {
                       {iniciais(aluno?.nome || '?')}
                     </span>
                     <div className="min-w-0">
-                      <p className="truncate font-semibold text-zinc-900 dark:text-zinc-100">
-                        {aluno?.nome || 'Aluno removido'}
-                      </p>
+                      {aluno ? (
+                        <button
+                          onClick={() => setAlunoHistorico(aluno)}
+                          className="block w-full truncate text-left font-semibold text-zinc-900 transition hover:text-primary-600 dark:text-zinc-100 dark:hover:text-primary-400"
+                          title="Ver histórico do aluno"
+                        >
+                          {aluno.nome}
+                        </button>
+                      ) : (
+                        <p className="truncate font-semibold text-zinc-900 dark:text-zinc-100">
+                          Aluno removido
+                        </p>
+                      )}
                       <p className="text-xs text-zinc-500 dark:text-zinc-400">
                         {formatarDataHora(h.data)}
                         {h.tempo_segundos != null && (
@@ -723,6 +842,13 @@ export default function Checkins() {
           )}
         </div>
       </Modal>
+    {/* ---------- Modal de histórico detalhado do aluno ---------- */}
+      {alunoHistorico && (
+        <ModalHistorico
+          aluno={alunoHistorico}
+          onFechar={() => setAlunoHistorico(null)}
+        />
+      )}
     </div>
   )
 }

@@ -3,12 +3,13 @@
 // =====================================================================
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Plus, Search, Pencil, Trash2, Dumbbell, Users, Phone } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, Dumbbell, Users, Phone, History } from 'lucide-react'
 import { useAlunos } from '../hooks/useAlunos'
 import { useToast } from '../components/Toast'
 import { Modal } from '../components/Modal'
 import { StatusBadge } from '../components/StatusBadge'
 import FormAluno from '../components/FormAluno'
+import ModalHistorico from '../components/ModalHistorico'
 import { Button, Input, Card, EstadoVazio, Spinner } from '../components/ui'
 import { formatarMoeda, formatarData, iniciais } from '../utils/format'
 
@@ -19,6 +20,7 @@ export default function Alunos() {
   const [busca, setBusca] = useState('')
   const [modalAberto, setModalAberto] = useState(false)
   const [alunoEditando, setAlunoEditando] = useState(null)
+  const [alunoHistorico, setAlunoHistorico] = useState(null)
   const [salvando, setSalvando] = useState(false)
 
   const filtrados = useMemo(() => {
@@ -130,9 +132,13 @@ export default function Alunos() {
                   {iniciais(aluno.nome)}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate font-semibold text-zinc-900 dark:text-zinc-100">
+                  <button
+                    onClick={() => setAlunoHistorico(aluno)}
+                    className="block w-full truncate text-left font-semibold text-zinc-900 transition hover:text-primary-600 dark:text-zinc-100 dark:hover:text-primary-400"
+                    title="Ver histórico do aluno"
+                  >
                     {aluno.nome}
-                  </p>
+                  </button>
                   <p className="flex items-center gap-1 text-xs text-zinc-500 dark:text-zinc-400">
                     {aluno.telefone ? (
                       <>
@@ -150,6 +156,13 @@ export default function Alunos() {
                 </div>
                 <StatusBadge status={aluno.status_pagamento} compacto />
                 <div className="flex shrink-0 items-center gap-1">
+                  <button
+                    onClick={() => setAlunoHistorico(aluno)}
+                    className="rounded-lg p-2 text-zinc-500 transition hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                    title="Histórico do aluno"
+                  >
+                    <History className="h-4 w-4" />
+                  </button>
                   <Link
                     to={`/treinos?aluno=${aluno.id}`}
                     className="rounded-lg p-2 text-primary-600 transition hover:bg-primary-50 dark:text-primary-400 dark:hover:bg-primary-950"
@@ -190,6 +203,13 @@ export default function Alunos() {
           onCancelar={() => setModalAberto(false)}
         />
       </Modal>
+
+      {alunoHistorico && (
+        <ModalHistorico
+          aluno={alunoHistorico}
+          onFechar={() => setAlunoHistorico(null)}
+        />
+      )}
     </div>
   )
 }
