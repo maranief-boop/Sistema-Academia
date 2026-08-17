@@ -89,7 +89,7 @@ function extrairBpm(valor: DataView): number {
 
 // Estilo "vidro fosco" premium usado nos cards principais
 const VIDRO =
-  'rounded-3xl border border-white/[0.08] bg-zinc-900/80 shadow-[0_8px_32px_rgba(0,0,0,0.45)] ring-1 ring-inset ring-white/[0.06] backdrop-blur-xl'
+  'rounded-3xl border border-white/[0.08] bg-zinc-900/85 shadow-[0_8px_32px_rgba(0,0,0,0.45)] ring-1 ring-inset ring-white/[0.06] backdrop-blur-2xl'
 
 // Cabeçalho padrão dos cards: ícone em pílula + título
 function CardHeader({
@@ -1516,7 +1516,7 @@ export default function PortalAluno() {
                 {treinos.map((treino) => (
                   <div
                     key={treino.id}
-                    className={`overflow-hidden rounded-2xl border bg-gradient-to-b from-white/[0.07] to-white/[0.02] transition-all duration-300 hover:border-white/20 ${
+                    className={`overflow-hidden rounded-2xl border bg-gradient-to-b from-white/[0.11] to-white/[0.06] backdrop-blur-lg transition-all duration-300 hover:border-white/20 ${
                       treinoHoje?.id === treino.id
                         ? 'border-primary-500/40 ring-1 ring-inset ring-primary-500/30'
                         : 'border-white/10'
@@ -1595,7 +1595,7 @@ export default function PortalAluno() {
 
                 {/* -------- Macrociclo (12 semanas) -------- */}
                 {macrociclo.length > 0 && (
-                  <div className="overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/[0.07] to-white/[0.02]">
+                  <div className="overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/[0.11] to-white/[0.06] backdrop-blur-lg">
                     <button
                       onClick={() => setVerMacrociclo((v) => !v)}
                       className="flex w-full items-center justify-between px-4 py-3.5 text-left transition-colors hover:bg-white/[0.03]"
