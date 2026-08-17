@@ -83,9 +83,9 @@ function extrairBpm(valor: DataView): number {
   return em16Bits ? valor.getUint16(1, true) : valor.getUint8(1)
 }
 
-// Estilo "vidro fosco" sólido para melhor legibilidade
+// Estilo "vidro fosco" premium usado nos cards principais
 const VIDRO =
-  'rounded-3xl border border-white/[0.08] bg-zinc-900/95 shadow-[0_8px_32px_rgba(0,0,0,0.45)] ring-1 ring-inset ring-white/[0.06] backdrop-blur-xl'
+  'rounded-3xl border border-white/[0.08] bg-zinc-900/80 shadow-[0_8px_32px_rgba(0,0,0,0.45)] ring-1 ring-inset ring-white/[0.06] backdrop-blur-xl'
 
 // Cabeçalho padrão dos cards: ícone em pílula + título
 function CardHeader({
