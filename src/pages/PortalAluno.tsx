@@ -4,6 +4,7 @@
 // e macrociclo. Visual glassmorphism sobre foto de academia.
 // =====================================================================
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import type { ReactNode } from 'react'
 import { supabase } from '../lib/supabase'
 import { useApp } from '../context/AppContext'
 import { useToast } from '../components/Toast'
@@ -66,9 +67,34 @@ const CHAVE_SESSAO = 'aluno_sessao'
 // Slogan exibido abaixo do nome da academia
 const SLOGAN = 'Transforme sua rotina, conquiste resultados'
 
-// Estilo "vidro fosco" usado nos cards principais
+// Estilo "vidro fosco" premium usado nos cards principais
 const VIDRO =
-  'rounded-2xl border border-white/10 bg-[rgba(18,18,18,0.75)] shadow-lg shadow-black/30 backdrop-blur-md'
+  'rounded-3xl border border-white/[0.08] bg-[rgba(20,20,20,0.72)] shadow-[0_8px_32px_rgba(0,0,0,0.45)] ring-1 ring-inset ring-white/[0.06] backdrop-blur-xl'
+
+// Cabeçalho padrão dos cards: ícone em pílula + título
+function CardHeader({
+  icon: Icone,
+  titulo,
+  children
+}: {
+  icon: any
+  titulo: string
+  children?: ReactNode
+}) {
+  return (
+    <div className="mb-4 flex items-center justify-between gap-2">
+      <div className="flex items-center gap-2.5">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-primary-500/15 text-primary-300 ring-1 ring-inset ring-primary-500/25">
+          <Icone className="h-4 w-4" />
+        </span>
+        <h2 className="text-[13px] font-bold uppercase tracking-wide text-white/90">
+          {titulo}
+        </h2>
+      </div>
+      {children}
+    </div>
+  )
+}
 
 // Fundo da academia + sobreposição escura em gradiente
 function FundoAcademia() {
@@ -714,9 +740,10 @@ export default function PortalAluno() {
           </div>
         </header>
 
-        <main className="mx-auto mt-6 w-full max-w-md space-y-4 px-4">
+        <main className="mx-auto mt-7 w-full max-w-md space-y-5 px-4">
           {/* ---------- Card de Check-in ---------- */}
-          <section className={`${VIDRO} p-5 text-center`}>
+          <section className={`${VIDRO} p-6 text-center`}>
+            <CardHeader icon={CalendarCheck} titulo="Check-in do Dia" />
             <p className="text-xs font-medium capitalize text-white/60">
               {dataHoje}
             </p>
@@ -724,8 +751,8 @@ export default function PortalAluno() {
             {jaCheckinHoje || checkinSucesso ? (
               // Feedback visual de sucesso + botão desabilitado (sempre visível)
               <div className="py-2">
-                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-emerald-400/40 bg-emerald-500/20">
-                  <CheckCircle2 className="h-7 w-7 text-emerald-400" />
+                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border border-emerald-400/40 bg-emerald-500/15 shadow-lg shadow-emerald-500/20 ring-4 ring-emerald-500/10">
+                  <CheckCircle2 className="h-8 w-8 text-emerald-400" />
                 </div>
                 <p className="mt-3 font-bold text-white">
                   Check-in realizado com sucesso!
@@ -735,7 +762,7 @@ export default function PortalAluno() {
                 </p>
                 <button
                   disabled
-                  className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 py-4 text-base font-extrabold text-white/40"
+                  className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 py-4 text-base font-extrabold text-white/35"
                 >
                   <CheckCircle2 className="h-5 w-5" />
                   Check-in já realizado hoje
@@ -745,7 +772,7 @@ export default function PortalAluno() {
               <button
                 onClick={fazerCheckin}
                 disabled={registrando || verificandoCheckin}
-                className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-primary-500 to-primary-700 py-4 text-base font-extrabold text-white shadow-lg shadow-primary-900/50 transition hover:brightness-105 active:scale-[0.99] disabled:opacity-60"
+                className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-primary-500 to-primary-700 py-4 text-base font-extrabold text-white shadow-lg shadow-primary-500/30 ring-1 ring-inset ring-white/20 transition-all duration-300 hover:brightness-110 hover:shadow-primary-500/40 active:scale-[0.97] disabled:opacity-60"
               >
                 {registrando || verificandoCheckin ? (
                   <Loader2 className="h-5 w-5 animate-spin" />
@@ -762,21 +789,31 @@ export default function PortalAluno() {
           </section>
 
           {/* ---------- Cronômetro de Treino ---------- */}
-          <section className={`${VIDRO} p-5 text-center`}>
-            <h2 className="text-xs font-medium uppercase tracking-wide text-white/60 mb-3">Cronômetro de Treino</h2>
-            <p className="text-5xl font-extrabold tabular-nums text-white">
-              {formatarTempo(tempoDecorrido)}
+          <section className={`${VIDRO} p-6 text-center`}>
+            <CardHeader icon={Timer} titulo="Cronômetro de Treino" />
+            <div className="mx-auto inline-flex rounded-3xl border border-white/10 bg-white/[0.04] px-8 py-4 shadow-inner ring-1 ring-inset ring-white/5">
+              <p
+                className={`text-5xl font-extrabold tabular-nums transition-colors ${
+                  cronometroAtivo ? 'text-primary-300' : 'text-white'
+                }`}
+              >
+                {formatarTempo(tempoDecorrido)}
+              </p>
+            </div>
+            <p className="mt-3 text-xs font-medium text-white/50">
+              {cronometroAtivo
+                ? 'Treinando... keep it up! 🔥'
+                : tempoDecorrido > 0
+                  ? 'Pausado — continue quando quiser'
+                  : 'Inicie quando começar a treinar'}
             </p>
-            <p className="mt-1 text-xs text-white/50">
-              {cronometroAtivo ? 'Treinando... keep it up! 🔥' : tempoDecorrido > 0 ? 'Pausado — continue quando quiser' : 'Inicie quando começar a treinar'}
-            </p>
-            <div className="mt-4 flex gap-2">
+            <div className="mt-5 flex gap-2.5">
               <button
                 onClick={alternarCronometro}
-                className={`flex flex-1 items-center justify-center gap-2 rounded-2xl py-3.5 text-sm font-extrabold text-white shadow-lg transition active:scale-[0.99] ${
+                className={`group flex flex-1 items-center justify-center gap-2 rounded-2xl py-4 text-sm font-extrabold text-white transition-all duration-300 active:scale-[0.97] ${
                   cronometroAtivo
-                    ? 'bg-amber-500 hover:bg-amber-600 shadow-amber-900/40'
-                    : 'bg-gradient-to-r from-primary-500 to-primary-700 shadow-primary-900/50 hover:brightness-105'
+                    ? 'bg-gradient-to-r from-amber-500 to-orange-500 shadow-lg shadow-amber-500/30 ring-1 ring-inset ring-white/20 hover:brightness-110 hover:shadow-amber-500/40'
+                    : 'bg-gradient-to-r from-primary-500 to-primary-700 shadow-lg shadow-primary-500/30 ring-1 ring-inset ring-white/20 hover:brightness-110 hover:shadow-primary-500/40'
                 }`}
               >
                 {cronometroAtivo ? (
@@ -796,7 +833,7 @@ export default function PortalAluno() {
               <button
                 onClick={abrirFeedback}
                 disabled={tempoDecorrido === 0 || salvandoFeedback}
-                className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-emerald-500 py-3.5 text-sm font-extrabold text-white shadow-lg shadow-emerald-900/40 transition hover:bg-emerald-600 active:scale-[0.99] disabled:opacity-40 disabled:hover:bg-emerald-500"
+                className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-500 to-emerald-600 py-4 text-sm font-extrabold text-white shadow-lg shadow-emerald-500/30 ring-1 ring-inset ring-white/20 transition-all duration-300 hover:brightness-110 hover:shadow-emerald-500/40 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-35 disabled:shadow-none"
               >
                 <CheckCircle2 className="h-4 w-4" />
                 Concluir Treino
@@ -805,12 +842,9 @@ export default function PortalAluno() {
           </section>
 
           {/* ---------- Frequência por período (Semanal/Mensal/Anual) ---------- */}
-          <section className={`${VIDRO} p-5`}>
-            <div className="mb-3 flex items-center justify-between gap-2">
-              <h2 className="text-xs font-medium uppercase tracking-wide text-white/60">
-                Frequência
-              </h2>
-              <div className="flex rounded-full border border-white/15 bg-white/5 p-0.5 text-[11px] font-bold">
+          <section className={`${VIDRO} p-6`}>
+            <CardHeader icon={CalendarDays} titulo="Frequência">
+              <div className="flex rounded-full border border-white/10 bg-white/5 p-1 text-[11px] font-bold">
                 {(
                   [
                     ['semanal', 'Semanal'],
@@ -821,17 +855,17 @@ export default function PortalAluno() {
                   <button
                     key={chave}
                     onClick={() => setPeriodoFrequencia(chave)}
-                    className={`rounded-full px-3 py-1 transition ${
+                    className={`rounded-full px-3 py-1 transition-all duration-300 ${
                       periodoFrequencia === chave
-                        ? 'bg-primary-500 text-white shadow'
-                        : 'text-white/60 hover:text-white'
+                        ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-md shadow-primary-900/40'
+                        : 'text-white/55 hover:text-white'
                     }`}
                   >
                     {rotulo}
                   </button>
                 ))}
               </div>
-            </div>
+            </CardHeader>
 
             {carregandoHistorico ? (
               <div className="flex justify-center py-10 text-primary-400">
@@ -839,27 +873,20 @@ export default function PortalAluno() {
               </div>
             ) : (
               <div>
-                <p className="mb-2 text-center text-xs font-semibold text-white/70">
-                  {periodoFrequencia === 'semanal' && (
-                    <>
-                      {frequenciaPeriodo.semanal.total} treino(s) nesta semana
-                    </>
-                  )}
-                  {periodoFrequencia === 'mensal' && (
-                    <>
-                      {frequenciaPeriodo.mensal.total} treino(s) neste mês
-                    </>
-                  )}
-                  {periodoFrequencia === 'anual' && (
-                    <>
-                      {frequenciaPeriodo.anual.total} treino(s) neste ano
-                    </>
-                  )}
-                </p>
+                <div className="mb-3 flex items-center justify-center gap-1.5 text-xs font-bold text-white/80">
+                  <span className="rounded-full bg-primary-500/15 px-2.5 py-1 text-primary-200 ring-1 ring-inset ring-primary-500/25">
+                    {periodoFrequencia === 'semanal' &&
+                      `${frequenciaPeriodo.semanal.total} treino(s) nesta semana`}
+                    {periodoFrequencia === 'mensal' &&
+                      `${frequenciaPeriodo.mensal.total} treino(s) neste mês`}
+                    {periodoFrequencia === 'anual' &&
+                      `${frequenciaPeriodo.anual.total} treino(s) neste ano`}
+                  </span>
+                </div>
 
                 {/* ---------- Semanal ---------- */}
                 {periodoFrequencia === 'semanal' && (
-                  <div className="flex h-40 items-end gap-1.5">
+                  <div className="flex h-44 items-end gap-1.5">
                     {ORDEM.map((diaIdx) => {
                       const esp = frequenciaPeriodo.semanal.esperadosPorDia[diaIdx]
                       const real = frequenciaPeriodo.semanal.realizadosPorDia[diaIdx]
@@ -869,33 +896,33 @@ export default function PortalAluno() {
                           key={diaIdx}
                           className={`flex flex-1 flex-col items-center gap-1 ${
                             isHoje
-                              ? 'rounded-lg bg-primary-500/20 px-0.5 py-1'
+                              ? 'rounded-2xl bg-primary-500/15 px-1 py-1.5 ring-1 ring-inset ring-primary-500/25'
                               : ''
                           }`}
                         >
-                          <div className="flex h-full w-full items-end justify-center gap-1">
-                            <div className="flex w-3 flex-col items-center justify-end">
-                              <span className="mb-0.5 text-[10px] font-semibold text-primary-300">
+                          <div className="flex h-full w-full items-end justify-center gap-1.5">
+                            <div className="flex w-3.5 flex-col items-center justify-end">
+                              <span className="mb-1 text-[10px] font-extrabold text-primary-300">
                                 {esp || ''}
                               </span>
                               <div
-                                className="w-full rounded-t bg-primary-500/70 transition-all"
+                                className="w-full rounded-full bg-gradient-to-t from-primary-600 to-primary-300 transition-all duration-500"
                                 style={{
                                   height: `${(esp / frequenciaPeriodo.semanal.maximo) * 100}%`,
-                                  minHeight: esp ? 3 : 0
+                                  minHeight: esp ? 4 : 0
                                 }}
                                 title={`Esperado (${ROTULOS[ORDEM.indexOf(diaIdx)]}): ${esp}`}
                               />
                             </div>
-                            <div className="flex w-3 flex-col items-center justify-end">
-                              <span className="mb-0.5 text-[10px] font-semibold text-yellow-300">
+                            <div className="flex w-3.5 flex-col items-center justify-end">
+                              <span className="mb-1 text-[10px] font-extrabold text-emerald-300">
                                 {real || ''}
                               </span>
                               <div
-                                className="w-full rounded-t bg-yellow-400 transition-all"
+                                className="w-full rounded-full bg-gradient-to-t from-emerald-600 to-emerald-400 transition-all duration-500"
                                 style={{
                                   height: `${(real / frequenciaPeriodo.semanal.maximo) * 100}%`,
-                                  minHeight: real ? 3 : 0
+                                  minHeight: real ? 4 : 0
                                 }}
                                 title={`Realizado (${ROTULOS[ORDEM.indexOf(diaIdx)]}): ${real}`}
                               />
@@ -918,25 +945,24 @@ export default function PortalAluno() {
 
                 {/* ---------- Mensal ---------- */}
                 {periodoFrequencia === 'mensal' && (
-                  <div className="flex h-40 items-end gap-1.5">
+                  <div className="flex h-44 items-end gap-2">
                     {frequenciaPeriodo.mensal.realizadosPorSemana.map((v, i) => (
                       <div
                         key={i}
                         className="flex flex-1 flex-col items-center gap-1"
                       >
                         <div className="flex w-full flex-1 items-end justify-center">
-                          <div className="flex w-8 flex-col items-center justify-end">
-                            <span className="mb-0.5 text-[10px] font-semibold text-yellow-300">
+                          <div className="flex w-10 flex-col items-center justify-end">
+                            <span className="mb-1 text-[10px] font-extrabold text-emerald-300">
                               {v || ''}
                             </span>
                             <div
-                              className={`w-full rounded-t transition-all ${
-                                v >= 2 ? 'bg-emerald-400' : 'bg-yellow-400'
-                              }`}
+                              className="w-full rounded-full bg-gradient-to-t from-emerald-600 to-emerald-400 transition-all duration-500"
                               style={{
                                 height: `${(v / frequenciaPeriodo.mensal.maximo) * 100}%`,
                                 minHeight: v ? 4 : 0
                               }}
+                              title={`Semana ${i + 1}: ${v} treino(s)`}
                             />
                           </div>
                         </div>
@@ -950,7 +976,7 @@ export default function PortalAluno() {
 
                 {/* ---------- Anual ---------- */}
                 {periodoFrequencia === 'anual' && (
-                  <div className="flex h-40 items-end gap-1">
+                  <div className="flex h-44 items-end gap-1">
                     {frequenciaPeriodo.anual.realizadosPorMes.map((v, i) => (
                       <div
                         key={i}
@@ -958,7 +984,7 @@ export default function PortalAluno() {
                       >
                         <div className="flex w-full flex-1 items-end justify-center">
                           <div
-                            className="w-full max-w-4 rounded-t bg-yellow-400 transition-all"
+                            className="w-full max-w-4 rounded-full bg-gradient-to-t from-primary-600 to-primary-300 transition-all duration-500"
                             style={{
                               height: `${(v / frequenciaPeriodo.anual.maximo) * 100}%`,
                               minHeight: v ? 3 : 0
@@ -976,42 +1002,41 @@ export default function PortalAluno() {
               </div>
             )}
 
-            <p className="mt-3 rounded-xl border border-primary-500/30 bg-primary-500/10 px-3 py-2 text-center text-[11px] leading-snug text-primary-200">
+            <p className="mt-4 rounded-2xl border border-primary-500/25 bg-primary-500/10 px-3.5 py-2.5 text-center text-[11px] leading-snug text-primary-200">
               Consistência é o segredo: cada treino concluído conta para a sua
               evolução. Continue assim! 💪
             </p>
           </section>
 
           {/* ---------- Evolução do PSE ---------- */}
-          <section className={`${VIDRO} p-5`}>
-            <div className="mb-3 flex items-center gap-2">
-              <TrendingUp className="h-4 w-4 text-primary-400" />
-              <h2 className="text-xs font-medium uppercase tracking-wide text-white/60">
-                Evolução do PSE
-              </h2>
-            </div>
+          <section className={`${VIDRO} p-6`}>
+            <CardHeader icon={TrendingUp} titulo="Evolução do PSE" />
             {pseSerie ? (
               <div>
-                <div className="mb-3 flex items-center justify-center gap-6 text-center">
+                <div className="mb-4 grid grid-cols-3 gap-2 rounded-2xl border border-white/10 bg-white/[0.04] p-3 text-center shadow-inner ring-1 ring-inset ring-white/5">
                   <div>
-                    <p className="text-lg font-extrabold text-white">
+                    <p className="text-xl font-extrabold text-white">
                       {pseSerie.media.toFixed(1)}
                     </p>
-                    <p className="text-[10px] text-white/50">
+                    <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-wide text-white/50">
                       Média de esforço
                     </p>
                   </div>
-                  <div>
-                    <p className="text-lg font-extrabold text-white">
+                  <div className="border-x border-white/10">
+                    <p className="text-xl font-extrabold text-primary-300">
                       {pseSerie.pontos[pseSerie.pontos.length - 1].pse}/10
                     </p>
-                    <p className="text-[10px] text-white/50">Último treino</p>
+                    <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-wide text-white/50">
+                      Último treino
+                    </p>
                   </div>
                   <div>
-                    <p className="text-lg font-extrabold text-white">
+                    <p className="text-xl font-extrabold text-white">
                       {pseSerie.pontos.length}
                     </p>
-                    <p className="text-[10px] text-white/50">Treinos na série</p>
+                    <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-wide text-white/50">
+                      Treinos na série
+                    </p>
                   </div>
                 </div>
 
@@ -1020,7 +1045,9 @@ export default function PortalAluno() {
               </div>
             ) : (
               <div className="py-10 text-center text-white/60">
-                <TrendingUp className="mx-auto mb-2 h-8 w-8 opacity-40" />
+                <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-white/5 ring-1 ring-inset ring-white/10">
+                  <TrendingUp className="h-7 w-7 text-primary-400" />
+                </div>
                 <p className="text-sm font-semibold text-white/80">
                   Nenhum treino concluído ainda
                 </p>
@@ -1033,11 +1060,8 @@ export default function PortalAluno() {
           </section>
 
           {/* ---------- Ficha de Treino ---------- */}
-          <section className={`${VIDRO} p-5`}>
-            <div className="mb-4 flex items-center gap-2">
-              <Dumbbell className="h-5 w-5 text-primary-400" />
-              <h2 className="font-bold text-white">Minha Ficha de Treino</h2>
-            </div>
+          <section className={`${VIDRO} p-6`}>
+            <CardHeader icon={Dumbbell} titulo="Minha Ficha de Treino" />
 
             {carregandoTreinos ? (
               <div className="flex justify-center py-8 text-primary-400">
@@ -1058,10 +1082,10 @@ export default function PortalAluno() {
                 </p>
               </div>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {/* -------- Treino de HOJE (destacado) -------- */}
-                <div className="overflow-hidden rounded-xl bg-gradient-to-br from-primary-600 to-primary-700 text-white shadow-lg shadow-primary-900/40">
-                  <div className="px-4 pt-3">
+                <div className="overflow-hidden rounded-3xl bg-gradient-to-br from-primary-600 to-primary-700 text-white shadow-lg shadow-primary-500/25 ring-1 ring-inset ring-white/20">
+                  <div className="px-5 pt-4">
                     <div className="flex items-center gap-2">
                       <CalendarDays className="h-4 w-4" />
                       <p className="text-[11px] font-bold uppercase tracking-wider opacity-90">
@@ -1072,7 +1096,7 @@ export default function PortalAluno() {
                       <p className="mt-1 text-2xl font-extrabold">
                         Treino {treinoHoje.dia_semana}
                         {(treinoHoje.exercicios_json || []).length > 0 && (
-                          <span className="ml-2 align-middle text-xs font-semibold opacity-80">
+                          <span className="ml-2 align-middle rounded-full bg-white/15 px-2 py-0.5 text-xs font-semibold">
                             {(treinoHoje.exercicios_json || []).length} exercício(s)
                           </span>
                         )}
@@ -1084,7 +1108,7 @@ export default function PortalAluno() {
                   {treinoHoje && (treinoHoje.exercicios_json || []).length > 0 ? (
                     <ul className="space-y-2 p-4">
                       {(treinoHoje.exercicios_json || []).map((ex, i) => (
-                        <li key={i} className="rounded-xl bg-white/10 px-3 py-2.5">
+                        <li key={i} className="rounded-2xl bg-white/10 px-3.5 py-2.5 backdrop-blur-sm">
                           <div className="flex items-center justify-between gap-3">
                             <div className="min-w-0">
                               <p className="truncate text-sm font-bold">{ex.nome}</p>
@@ -1098,7 +1122,7 @@ export default function PortalAluno() {
                                 href={ex.url_video}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-white px-2.5 py-1.5 text-[11px] font-bold text-primary-700 transition hover:bg-zinc-100"
+                                className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-[11px] font-bold text-primary-700 shadow-sm transition-all duration-300 hover:bg-zinc-100 active:scale-95"
                               >
                                 <PlayCircle className="h-3.5 w-3.5" />
                                 Ver Vídeo
@@ -1109,7 +1133,7 @@ export default function PortalAluno() {
                       ))}
                     </ul>
                   ) : treinoHoje ? (
-                    <p className="px-4 pb-4 text-xs opacity-80">
+                    <p className="px-5 pb-4 text-xs opacity-80">
                       Nenhum exercício cadastrado para este treino ainda.
                     </p>
                   ) : null}
@@ -1117,8 +1141,10 @@ export default function PortalAluno() {
 
                 {/* -------- Restrições / cuidados (alto contraste) -------- */}
                 {treinos[0]?.restricoes && (
-                  <div className="flex items-start gap-2.5 rounded-xl border border-amber-500/40 bg-amber-400 px-3.5 py-2.5 shadow-lg shadow-amber-900/20">
-                    <HeartPulse className="mt-0.5 h-4 w-4 shrink-0 text-amber-950" />
+                  <div className="flex items-start gap-3 rounded-2xl border border-amber-500/40 bg-gradient-to-br from-amber-400 to-amber-300 px-4 py-3 shadow-lg shadow-amber-500/20">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-amber-950/10">
+                      <HeartPulse className="h-4 w-4 text-amber-950" />
+                    </span>
                     <div>
                       <p className="text-xs font-bold uppercase tracking-wide text-amber-950">
                         Restrições / Cuidados
@@ -1138,11 +1164,21 @@ export default function PortalAluno() {
                 {treinos.map((treino) => (
                   <div
                     key={treino.id}
-                    className="overflow-hidden rounded-xl border border-white/10 bg-white/5"
+                    className={`overflow-hidden rounded-2xl border bg-gradient-to-b from-white/[0.07] to-white/[0.02] transition-all duration-300 hover:border-white/20 ${
+                      treinoHoje?.id === treino.id
+                        ? 'border-primary-500/40 ring-1 ring-inset ring-primary-500/30'
+                        : 'border-white/10'
+                    }`}
                   >
-                    <div className="flex items-center justify-between border-b border-white/10 bg-white/5 px-4 py-2.5">
-                      <div className="flex items-center gap-2.5">
-                        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary-500 to-primary-700 text-sm font-extrabold text-white">
+                    <div className="flex items-center justify-between px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        <span
+                          className={`flex h-10 w-10 items-center justify-center rounded-full text-sm font-extrabold text-white shadow-lg ${
+                            treinoHoje?.id === treino.id
+                              ? 'bg-gradient-to-br from-primary-400 to-primary-600 shadow-primary-500/40 ring-2 ring-white/20'
+                              : 'bg-gradient-to-br from-primary-500 to-primary-700 shadow-primary-900/40 ring-2 ring-white/10'
+                          }`}
+                        >
                           {treino.dia_semana}
                         </span>
                         <div>
@@ -1157,16 +1193,16 @@ export default function PortalAluno() {
                         </div>
                       </div>
                       {treinoHoje?.id === treino.id && (
-                        <span className="rounded-full bg-primary-500 px-2 py-0.5 text-[10px] font-bold text-white">
+                        <span className="rounded-full bg-primary-500/20 px-2.5 py-1 text-[10px] font-bold text-primary-200 ring-1 ring-inset ring-primary-500/40">
                           Hoje
                         </span>
                       )}
                     </div>
-                    <ul className="divide-y divide-white/10">
+                    <ul className="divide-y divide-white/[0.06] border-t border-white/[0.06]">
                       {(treino.exercicios_json || []).map((ex, i) => (
                         <li
                           key={i}
-                          className="flex items-center justify-between gap-3 px-4 py-2.5"
+                          className="flex items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-white/[0.03]"
                         >
                           <div className="min-w-0">
                             <p className="truncate font-semibold text-white">
@@ -1182,10 +1218,10 @@ export default function PortalAluno() {
                               href={ex.url_video}
                               target="_blank"
                               rel="noreferrer"
-                              className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-primary-600 px-2.5 py-1.5 text-xs font-bold text-white transition hover:bg-primary-700"
+                              className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-primary-500/90 px-3 py-1.5 text-[11px] font-bold text-white shadow-sm shadow-primary-900/40 transition-all duration-300 hover:bg-primary-400 active:scale-95"
                               title="Assistir vídeo explicativo"
                             >
-                              <PlayCircle className="h-4 w-4" />
+                              <PlayCircle className="h-3.5 w-3.5" />
                               Ver Vídeo
                             </a>
                           )}
@@ -1202,25 +1238,27 @@ export default function PortalAluno() {
 
                 {/* -------- Macrociclo (12 semanas) -------- */}
                 {macrociclo.length > 0 && (
-                  <div className="overflow-hidden rounded-xl border border-white/10 bg-white/5">
+                  <div className="overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-white/[0.07] to-white/[0.02]">
                     <button
                       onClick={() => setVerMacrociclo((v) => !v)}
-                      className="flex w-full items-center justify-between px-4 py-3 text-left"
+                      className="flex w-full items-center justify-between px-4 py-3.5 text-left transition-colors hover:bg-white/[0.03]"
                     >
-                      <span className="flex items-center gap-2">
-                        <ListTree className="h-4 w-4 text-primary-400" />
+                      <span className="flex items-center gap-3">
+                        <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary-500/15 text-primary-300 ring-1 ring-inset ring-primary-500/25">
+                          <ListTree className="h-4 w-4" />
+                        </span>
                         <span className="text-sm font-bold text-white">
                           Macrociclo (12 semanas)
                         </span>
                       </span>
                       <ChevronDown
-                        className={`h-4 w-4 text-white/50 transition ${
+                        className={`h-4 w-4 text-white/50 transition-transform duration-300 ${
                           verMacrociclo ? 'rotate-180' : ''
                         }`}
                       />
                     </button>
                     {verMacrociclo && (
-                      <div className="divide-y divide-white/10 border-t border-white/10">
+                      <div className="divide-y divide-white/[0.06] border-t border-white/[0.06]">
                         {macrociclo.map((s) => (
                           <div key={s.semana} className="px-4 py-3">
                             <p className="text-xs font-extrabold uppercase tracking-wide text-primary-400">
@@ -1267,29 +1305,34 @@ export default function PortalAluno() {
         {/* ---------- Modal de Feedback (Concluir Treino) ---------- */}
         {modalFeedback && (
           <div
-            className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-0 backdrop-blur-sm sm:items-center sm:p-4"
+            className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-0 backdrop-blur-md sm:items-center sm:p-4"
             onClick={() => setModalFeedback(false)}
           >
             <div
-              className="flex max-h-[92vh] w-full max-w-md flex-col overflow-hidden rounded-t-2xl border border-white/10 bg-[#161616] shadow-2xl sm:rounded-2xl"
+              className="flex max-h-[92vh] w-full max-w-md flex-col overflow-hidden rounded-t-3xl border border-white/[0.08] bg-[#161616] shadow-[0_24px_64px_rgba(0,0,0,0.6)] ring-1 ring-inset ring-white/[0.06] backdrop-blur-2xl sm:rounded-3xl"
               onClick={(e) => e.stopPropagation()}
               role="dialog"
               aria-modal="true"
             >
-              <div className="flex items-center justify-between border-b border-white/10 px-5 py-3.5">
-                <h2 className="text-base font-bold text-white">Concluir Treino</h2>
+              <div className="flex items-center justify-between px-6 py-4">
+                <div className="flex items-center gap-3">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary-500/15 text-primary-300 ring-1 ring-inset ring-primary-500/25">
+                    <CheckCircle2 className="h-4 w-4" />
+                  </span>
+                  <h2 className="text-base font-bold text-white">Concluir Treino</h2>
+                </div>
                 <button
                   onClick={() => setModalFeedback(false)}
-                  className="rounded-lg p-1.5 text-white/50 transition hover:bg-white/10 hover:text-white"
+                  className="rounded-full p-2 text-white/50 transition-all duration-300 hover:bg-white/10 hover:text-white active:scale-90"
                   aria-label="Fechar"
                 >
                   <X className="h-5 w-5" />
                 </button>
               </div>
 
-              <div className="space-y-5 overflow-y-auto p-5">
+              <div className="space-y-5 overflow-y-auto px-6 pb-6 pt-2">
                 {/* Tempo total da sessão */}
-                <div className="flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+                <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 ring-1 ring-inset ring-white/5">
                   <span className="flex items-center gap-2 text-sm font-semibold text-white/80">
                     <Timer className="h-4 w-4 text-primary-400" />
                     Tempo da sessão
@@ -1305,7 +1348,7 @@ export default function PortalAluno() {
                     <label className="text-sm font-bold text-white">
                       Esforço da sessão (PSE)
                     </label>
-                    <span className="rounded-full bg-primary-500 px-3 py-0.5 text-sm font-extrabold text-white">
+                    <span className="rounded-full bg-gradient-to-r from-primary-500 to-primary-600 px-3.5 py-1 text-sm font-extrabold text-white shadow-md shadow-primary-900/40">
                       {pse}/10
                     </span>
                   </div>
@@ -1341,21 +1384,21 @@ export default function PortalAluno() {
                     onChange={(e) => setObservacoes(e.target.value)}
                     rows={3}
                     placeholder="Como foi o treino de hoje? Algum exercício difícil, dor, ou algo que queira contar ao seu treinador..."
-                    className="w-full resize-none rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-primary-400 focus:ring-2 focus:ring-primary-500/30"
+                    className="w-full resize-none rounded-2xl border border-white/10 bg-white/[0.04] px-3.5 py-3 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-primary-400 focus:ring-2 focus:ring-primary-500/30"
                   />
                 </div>
 
-                <div className="flex gap-2 pt-1">
+                <div className="flex gap-2.5 pt-1">
                   <button
                     onClick={() => setModalFeedback(false)}
-                    className="flex-1 rounded-xl border border-white/15 bg-white/5 py-3 text-sm font-bold text-white/70 transition hover:bg-white/10"
+                    className="flex-1 rounded-2xl border border-white/15 bg-white/5 py-3.5 text-sm font-bold text-white/70 transition-all duration-300 hover:bg-white/10 active:scale-[0.97]"
                   >
                     Cancelar
                   </button>
                   <button
                     onClick={salvarFeedback}
                     disabled={salvandoFeedback}
-                    className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-500 py-3 text-sm font-extrabold text-white shadow-lg shadow-emerald-900/40 transition hover:bg-emerald-600 active:scale-[0.99] disabled:opacity-60"
+                    className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-500 to-emerald-600 py-3.5 text-sm font-extrabold text-white shadow-lg shadow-emerald-500/30 ring-1 ring-inset ring-white/20 transition-all duration-300 hover:brightness-110 active:scale-[0.97] disabled:opacity-60"
                   >
                     {salvandoFeedback ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
