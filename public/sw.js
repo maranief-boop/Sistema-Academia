@@ -1,6 +1,6 @@
 /* Service Worker do PWA — estratégia "network-first" com fallback em cache.
    Garante que o app funcione offline após a primeira visita. */
-const CACHE = 'sistema-academia-v1'
+const CACHE = 'sistema-academia-v2'
 
 self.addEventListener('install', () => {
   self.skipWaiting()
@@ -22,7 +22,7 @@ self.addEventListener('fetch', (event) => {
 
   // Não intercepta chamadas à API do Supabase (sempre online)
   const url = new URL(req.url)
-  if (!url.origin === self.location.origin) return
+  if (url.origin !== self.location.origin) return
 
   event.respondWith(
     (async () => {
