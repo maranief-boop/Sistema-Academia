@@ -20,7 +20,8 @@ import {
   HeartPulse,
   Save,
   ListTree,
-  Info
+  Info,
+  Timer
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAlunos } from '../hooks/useAlunos'
@@ -47,7 +48,8 @@ const EXERCICIO_VAZIO = {
   series: 3,
   repeticoes: '10',
   carga: '',
-  url_video: ''
+  url_video: '',
+  descanso: 60
 }
 
 export default function Treinos() {
@@ -71,6 +73,11 @@ export default function Treinos() {
   // Dias da semana por card de treino (ex.: { A: ['Segunda','Quinta'], ... })
   const [diasPorTreino, setDiasPorTreino] = useState(
     Object.fromEntries(DIAS_FICHA.map((d) => [d, []]))
+  )
+  // Descanso padrão (segundos) por card de treino — aplicado a todos os
+  // exercícios do dia, podendo ser sobrescrito exercício a exercício.
+  const [descansoPadrao, setDescansoPadrao] = useState(
+    Object.fromEntries(DIAS_FICHA.map((d) => [d, 60]))
   )
   const [fichaInicializada, setFichaInicializada] = useState('')
   // Aluno cujos treinos já terminaram de carregar (evita inicializar o
@@ -100,14 +107,18 @@ export default function Treinos() {
   useEffect(() => {
     if (alunoId && treinosAluno === alunoId && fichaInicializada !== alunoId) {
       const mapa = {}
+      const mapaDescanso = {}
       DIAS_FICHA.forEach((d) => {
         const t = treinos.find((tt) => tt.dia_semana === d)
         mapa[d] = (t?.dias_semana || '')
           .split(',')
           .map((s) => s.trim())
           .filter(Boolean)
+        mapaDescanso[d] =
+          t?.descanso_padrao != null ? t.descanso_padrao : 60
       })
       setDiasPorTreino(mapa)
+      setDescansoPadrao(mapaDescanso)
       setRestricoes(treinos[0]?.restricoes || '')
       setFichaInicializada(alunoId)
     }
@@ -177,13 +188,34 @@ export default function Treinos() {
       } else {
         await salvarDia(alunoId, dia, exercicios, {
           dias_semana: novos.join(', '),
-          restricoes: restricoes.trim()
+          restricoes: restricoes.trim(),
+          descanso_padrao: Number(descansoPadrao[dia]) || 0
         })
       }
       toast(`Treino ${dia}: ${novos.length ? novos.join(', ') : 'sem dias marcados'}`)
     } catch (e) {
       setDiasPorTreino((prev) => ({ ...prev, [dia]: atual }))
       toast(e.message || 'Erro ao salvar os dias.', 'erro')
+    }
+  }
+
+  // ----- Descanso padrão do dia (aplicado a todos os exercícios) -----
+  const salvarDescansoPadrao = async (dia, valor) => {
+    if (!alunoId) {
+      toast('Selecione um aluno primeiro.', 'aviso')
+      return
+    }
+    const v = Math.max(0, Number(valor) || 0)
+    setDescansoPadrao((prev) => ({ ...prev, [dia]: v }))
+    try {
+      await salvarDia(alunoId, dia, listaExercicios(dia), {
+        dias_semana: (diasPorTreino[dia] || []).join(', '),
+        restricoes: restricoes.trim(),
+        descanso_padrao: v
+      })
+      toast(`Descanso padrão do Treino ${dia}: ${v}s`)
+    } catch (e) {
+      toast(e.message || 'Erro ao salvar o descanso.', 'erro')
     }
   }
 
@@ -197,13 +229,15 @@ export default function Treinos() {
       } else if (treino) {
         await salvarDia(alunoId, dia, [], {
           dias_semana: diasPorTreino[dia].join(', '),
-          restricoes: restricoes.trim()
+          restricoes: restricoes.trim(),
+          descanso_padrao: Number(descansoPadrao[dia]) || 0
         })
       }
     } else {
       await salvarDia(alunoId, dia, exercicios, {
         dias_semana: (diasPorTreino[dia] || []).join(', '),
-        restricoes: restricoes.trim()
+        restricoes: restricoes.trim(),
+        descanso_padrao: Number(descansoPadrao[dia]) || 0
       })
     }
   }
@@ -413,6 +447,24 @@ export default function Treinos() {
                         )
                       })}
                     </div>
+
+                    {/* Descanso padrão do dia */}
+                    <div className="mt-3 flex items-center gap-2">
+                      <Timer className="h-3.5 w-3.5 text-zinc-400" />
+                      <label className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                        Descanso padrão
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="5"
+                        value={descansoPadrao[dia]}
+                        onChange={(e) => salvarDescansoPadrao(dia, e.target.value)}
+                        className="w-20 rounded-lg border border-zinc-300 bg-white px-2 py-1 text-right text-xs font-semibold text-zinc-900 outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-500/30 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+                        title="Tempo de repouso padrão entre as séries deste treino"
+                      />
+                      <span className="text-[10px] text-zinc-400">seg</span>
+                    </div>
                   </div>
 
                   {exercicios.length === 0 ? (
@@ -430,6 +482,7 @@ export default function Treinos() {
                             <p className="text-xs text-zinc-500 dark:text-zinc-400">
                               {ex.series} séries · {ex.repeticoes} reps
                               {ex.carga ? ` · ${ex.carga}` : ''}
+                              {ex.descanso ? ` · descanso ${ex.descanso}s` : ''}
                             </p>
                           </div>
                           <div className="flex shrink-0 items-center gap-1">
@@ -486,6 +539,7 @@ export default function Treinos() {
         {modal && (
           <FormExercicio
             inicial={modal.exercicio}
+            descansoPadrao={descansoPadrao[modal.dia]}
             onSalvar={salvarExercicio}
             onCancelar={() => setModal(null)}
           />
@@ -573,9 +627,11 @@ export default function Treinos() {
 }
 
 // ---------- Formulário de exercício ----------
-function FormExercicio({ inicial = null, onSalvar, onCancelar }) {
+function FormExercicio({ inicial = null, onSalvar, onCancelar, descansoPadrao = 60 }) {
   const [form, setForm] = useState(
-    inicial ? { ...EXERCICIO_VAZIO, ...inicial } : EXERCICIO_VAZIO
+    inicial
+      ? { ...EXERCICIO_VAZIO, ...inicial }
+      : { ...EXERCICIO_VAZIO, descanso: descansoPadrao }
   )
   const [erros, setErros] = useState({})
 
@@ -593,6 +649,7 @@ function FormExercicio({ inicial = null, onSalvar, onCancelar }) {
       series: Number(form.series) || 0,
       repeticoes: form.repeticoes,
       carga: form.carga,
+      descanso: Number(form.descanso) || 0,
       url_video: form.url_video.trim()
     })
   }
@@ -616,7 +673,7 @@ function FormExercicio({ inicial = null, onSalvar, onCancelar }) {
         )}
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 gap-3">
         <div>
           <Label>Séries</Label>
           <Input
@@ -641,6 +698,21 @@ function FormExercicio({ inicial = null, onSalvar, onCancelar }) {
             onChange={(e) => set('carga', e.target.value)}
             placeholder="Ex.: 30kg"
           />
+        </div>
+        <div>
+          <Label>Descanso (s)</Label>
+          <Input
+            type="number"
+            min="0"
+            step="5"
+            value={form.descanso}
+            onChange={(e) => set('descanso', e.target.value)}
+          />
+          <p className="mt-1.5 text-xs text-zinc-400">
+            Tempo de repouso entre séries (ex.: 60s). O aluno vê o cronômetro
+            e o celular vibra ao terminar. Este valor vale só para este
+            exercício — deixe em branco para herdar o descanso padrão do dia.
+          </p>
         </div>
       </div>
 

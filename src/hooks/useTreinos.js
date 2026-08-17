@@ -70,6 +70,7 @@ export function useTreinos() {
     const payload = { ...base }
     if (ficha.dias_semana != null) payload.dias_semana = ficha.dias_semana
     if (ficha.restricoes != null) payload.restricoes = ficha.restricoes
+    if (ficha.descanso_padrao != null) payload.descanso_padrao = ficha.descanso_padrao
 
     let resultado = await supabase
       .from('treinos')

@@ -60,6 +60,7 @@ type Treino = {
   dia_semana: string
   dias_semana?: string | null
   restricoes?: string | null
+  descanso_padrao?: number
   exercicios_json: Exercicio[]
 }
 
@@ -764,6 +765,42 @@ export default function PortalAluno() {
     (t.dias_semana || '').includes(hojeDiaNome)
   )
 
+  // ---------- Exercícios concluídos HOJE (persistidos no celular) ----------
+  const dataHojeISO = (() => {
+    const h = new Date()
+    return `${h.getFullYear()}-${String(h.getMonth() + 1).padStart(2, '0')}-${String(
+      h.getDate()
+    ).padStart(2, '0')}`
+  })()
+  const chaveConcluidos = aluno
+    ? `aluno_exercicios_concluidos_${aluno.id}_${dataHojeISO}`
+    : ''
+  const [concluidosHoje, setConcluidosHoje] = useState<number[]>([])
+
+  useEffect(() => {
+    if (!chaveConcluidos) {
+      setConcluidosHoje([])
+      return
+    }
+    try {
+      const salvos = JSON.parse(localStorage.getItem(chaveConcluidos) || '[]')
+      setConcluidosHoje(Array.isArray(salvos) ? salvos : [])
+    } catch {
+      setConcluidosHoje([])
+    }
+  }, [chaveConcluidos])
+
+  const marcarConcluido = (indice: number) => {
+    setConcluidosHoje((prev) => {
+      if (prev.includes(indice)) return prev
+      const novos = [...prev, indice]
+      try {
+        localStorage.setItem(chaveConcluidos, JSON.stringify(novos))
+      } catch {}
+      return novos
+    })
+  }
+
   // ===================================================================
   // TELA DE LOGIN
   // ===================================================================
@@ -1377,47 +1414,75 @@ export default function PortalAluno() {
                   </div>
                   {treinoHoje && (treinoHoje.exercicios_json || []).length > 0 ? (
                     <ul className="space-y-2 p-4">
-                      {(treinoHoje.exercicios_json || []).map((ex, i) => (
-                        <li
-                          key={i}
-                          className="overflow-hidden rounded-2xl bg-white/10 backdrop-blur-sm"
-                        >
-                          <div className="flex items-center justify-between gap-2 p-1.5">
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setExecucaoAtiva({ treino: treinoHoje, indice: i })
-                              }
-                              className="flex min-w-0 flex-1 items-center justify-between gap-2 rounded-xl px-2 py-1.5 text-left transition-colors hover:bg-white/10 active:bg-white/15"
-                            >
-                              <div className="min-w-0">
-                                <p className="truncate text-sm font-bold">{ex.nome}</p>
-                                <p className="text-xs opacity-85">
-                                  {ex.series} séries · {ex.repeticoes} reps
-                                  {ex.carga ? ` · ${ex.carga}` : ''}
-                                  {ex.descanso ? ` · descanso ${ex.descanso}s` : ''}
-                                </p>
-                              </div>
-                              <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-white px-2.5 py-1 text-[10px] font-bold text-primary-700 shadow-sm transition-all duration-300 active:scale-95">
-                                <PlayCircle className="h-3 w-3" />
-                                Executar
-                              </span>
-                            </button>
-                            {ex.url_video && (
-                              <a
-                                href={ex.url_video}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="inline-flex shrink-0 items-center gap-1 rounded-full bg-white/15 px-2.5 py-1.5 text-[10px] font-bold text-white/90 transition-all duration-300 hover:bg-white/25"
-                                title="Ver vídeo do exercício"
+                      {(treinoHoje.exercicios_json || []).map((ex, i) => {
+                        const feito = concluidosHoje.includes(i)
+                        const descansoTreino =
+                          Number(treinoHoje?.descanso_padrao) || 0
+                        const descansoEfetivo =
+                          ex.descanso != null
+                            ? Number(ex.descanso)
+                            : descansoTreino
+                        const nomeDescanso =
+                          descansoEfetivo > 0 ? ` · descanso ${descansoEfetivo}s` : ''
+                        return (
+                          <li
+                            key={i}
+                            className={`overflow-hidden rounded-2xl backdrop-blur-sm transition-colors ${
+                              feito
+                                ? 'bg-emerald-500/20 ring-1 ring-inset ring-emerald-400/40'
+                                : 'bg-white/10'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-2 p-1.5">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setExecucaoAtiva({
+                                    treino: treinoHoje as Treino,
+                                    indice: i
+                                  })
+                                }
+                                className="flex min-w-0 flex-1 items-center justify-between gap-2 rounded-xl px-2 py-1.5 text-left transition-colors hover:bg-white/10 active:bg-white/15"
                               >
-                                <PlayCircle className="h-3 w-3" />
-                                Vídeo
-                              </a>
-                            )}
-                          </div>
-                        </li>
-                      ))}
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-1.5">
+                                    <p className="truncate text-sm font-bold">
+                                      {ex.nome}
+                                    </p>
+                                    {feito && (
+                                      <span className="flex shrink-0 items-center gap-0.5 rounded-full bg-emerald-500/90 px-2 py-0.5 text-[10px] font-extrabold text-white">
+                                        <CheckCircle2 className="h-3 w-3" />
+                                        Feito
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p className={`text-xs ${feito ? 'text-emerald-200/80' : 'opacity-85'}`}>
+                                    {ex.series} séries · {ex.repeticoes} reps
+                                    {ex.carga ? ` · ${ex.carga}` : ''}
+                                    {nomeDescanso}
+                                  </p>
+                                </div>
+                                <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-white px-2.5 py-1 text-[10px] font-bold text-primary-700 shadow-sm transition-all duration-300 active:scale-95">
+                                  <PlayCircle className="h-3 w-3" />
+                                  {feito ? 'Refazer' : 'Executar'}
+                                </span>
+                              </button>
+                              {ex.url_video && (
+                                <a
+                                  href={ex.url_video}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-flex shrink-0 items-center gap-1 rounded-full bg-white/15 px-2.5 py-1.5 text-[10px] font-bold text-white/90 transition-all duration-300 hover:bg-white/25"
+                                  title="Ver vídeo do exercício"
+                                >
+                                  <PlayCircle className="h-3 w-3" />
+                                  Vídeo
+                                </a>
+                              )}
+                            </div>
+                          </li>
+                        )
+                      })}
                     </ul>
                   ) : treinoHoje ? (
                     <p className="px-5 pb-4 text-xs opacity-80">
@@ -1498,7 +1563,11 @@ export default function PortalAluno() {
                             <p className="text-xs text-white/50">
                               {ex.series} séries · {ex.repeticoes} reps
                               {ex.carga ? ` · ${ex.carga}` : ''}
-                              {ex.descanso ? ` · descanso ${ex.descanso}s` : ''}
+                              {ex.descanso != null || treino.descanso_padrao
+                                ? ` · descanso ${
+                                    ex.descanso ?? treino.descanso_padrao ?? 60
+                                  }s`
+                                : ''}
                             </p>
                           </div>
                           {ex.url_video && (
@@ -1595,7 +1664,9 @@ export default function PortalAluno() {
           <ModalExecucao
             treino={execucaoAtiva.treino}
             indice={execucaoAtiva.indice}
+            descansoPadrao={execucaoAtiva.treino.descanso_padrao}
             onFechar={() => setExecucaoAtiva(null)}
+            onConcluido={marcarConcluido}
           />
         )}
 
@@ -1730,15 +1801,24 @@ export default function PortalAluno() {
 function ModalExecucao({
   treino,
   indice,
-  onFechar
+  descansoPadrao,
+  onFechar,
+  onConcluido
 }: {
   treino: Treino
   indice: number
+  descansoPadrao?: number
+  onConcluido: (indice: number) => void
   onFechar: () => void
 }) {
   const exercicio: Exercicio = treino.exercicios_json[indice]
   const totalSeries = Math.max(1, Number(exercicio.series) || 1)
-  const descansoDefinido = Math.max(0, Number(exercicio.descanso) || 60)
+  // Descanso efetivo: valor do exercício > descanso padrão do dia > 60s
+  const descansoDefinido = Math.max(
+    0,
+    Number(exercicio.descanso != null ? exercicio.descanso : descansoPadrao) ||
+      60
+  )
 
   const [concluidas, setConcluidas] = useState(0)
   const [descansando, setDescansando] = useState(false)
@@ -1816,6 +1896,7 @@ function ModalExecucao({
     } else {
       garantirAudio()
       vibrar()
+      onConcluido(indice)
     }
   }
 
@@ -1856,7 +1937,7 @@ function ModalExecucao({
               <p className="text-xs text-white/50">
                 {totalSeries} séries · {exercicio.repeticoes} reps
                 {exercicio.carga ? ` · ${exercicio.carga}` : ''}
-                {exercicio.descanso ? ` · descanso ${exercicio.descanso}s` : ''}
+                {descansoDefinido > 0 ? ` · descanso ${descansoDefinido}s` : ''}
               </p>
             </div>
           </div>

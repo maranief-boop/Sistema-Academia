@@ -55,6 +55,7 @@ create table if not exists public.treinos (
 -- Para bancos já existentes: adiciona as colunas novas sem quebrar os dados
 alter table public.treinos add column if not exists dias_semana text;
 alter table public.treinos add column if not exists restricoes text;
+alter table public.treinos add column if not exists descanso_padrao integer default 60;
 
 -- Garante um único treino por (aluno, dia)
 create unique index if not exists treinos_aluno_dia_key on public.treinos (aluno_id, dia_semana);
