@@ -3,17 +3,20 @@
 // Mobile-first: login por CPF/telefone, check-in do dia, ficha de treino
 // e macrociclo. Visual glassmorphism sobre foto de academia.
 // =====================================================================
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { supabase } from '../lib/supabase'
 import { useApp } from '../context/AppContext'
 import { useToast } from '../components/Toast'
 import {
+  Activity,
   AlertCircle,
+  Bluetooth,
   CalendarCheck,
   CheckCircle2,
   ChevronDown,
   Dumbbell,
+  Heart,
   ListTree,
   Loader2,
   LogOut,
@@ -67,9 +70,22 @@ const CHAVE_SESSAO = 'aluno_sessao'
 // Slogan exibido abaixo do nome da academia
 const SLOGAN = 'Transforme sua rotina, conquiste resultados'
 
+// ---------- Web Bluetooth (frequencímetro / BPM) ----------
+// Disponível apenas em contexto seguro (HTTPS) + Chrome/Edge/Android.
+const bluetoothDisponivel =
+  typeof navigator !== 'undefined' && 'bluetooth' in navigator
+
+// Traduz a notificação da característica de medição cardíaca (0x2a37) em BPM.
+// Byte 0 = flags; bit 0 indica se o valor vem em 16 bits (caso contrário 8 bits).
+function extrairBpm(valor: DataView): number {
+  const flags = valor.getUint8(0)
+  const em16Bits = Boolean(flags & 0x1)
+  return em16Bits ? valor.getUint16(1, true) : valor.getUint8(1)
+}
+
 // Estilo "vidro fosco" premium usado nos cards principais
 const VIDRO =
-  'rounded-3xl border border-white/[0.08] bg-[rgba(20,20,20,0.72)] shadow-[0_8px_32px_rgba(0,0,0,0.45)] ring-1 ring-inset ring-white/[0.06] backdrop-blur-xl'
+  'rounded-3xl border border-white/[0.08] bg-zinc-900/80 shadow-[0_8px_32px_rgba(0,0,0,0.45)] ring-1 ring-inset ring-white/[0.06] backdrop-blur-xl'
 
 // Cabeçalho padrão dos cards: ícone em pílula + título
 function CardHeader({
@@ -274,6 +290,15 @@ export default function PortalAluno() {
   const [historicoTreinos, setHistoricoTreinos] = useState<any[]>([])
   const [carregandoHistorico, setCarregandoHistorico] = useState(false)
   const [periodoFrequencia, setPeriodoFrequencia] = useState<'semanal' | 'mensal' | 'anual'>('semanal')
+  const [periodoPse, setPeriodoPse] = useState<'semanal' | 'mensal' | 'anual'>('semanal')
+
+  // ---------- Frequencímetro (Web Bluetooth / BPM em tempo real) ----------
+  const [bpm, setBpm] = useState<number | null>(null)
+  const [bpmConectado, setBpmConectado] = useState(false)
+  const [bpmConectando, setBpmConectando] = useState(false)
+  const [bpmErro, setBpmErro] = useState('')
+  const bpmDeviceRef = useRef<any>(null)
+  const bpmCharRef = useRef<any>(null)
 
   const aluno = sessao?.aluno ?? null
 
@@ -335,6 +360,18 @@ export default function PortalAluno() {
     setTempoDecorrido(0)
     setModalFeedback(false)
     setTreinos([])
+    if (bpmDeviceRef.current || bpmCharRef.current) {
+      try {
+        bpmCharRef.current?.stopNotifications?.()
+        bpmDeviceRef.current?.gatt?.disconnect()
+      } catch {
+        // ignora falhas de desconexão no logout
+      }
+    }
+    bpmDeviceRef.current = null
+    bpmCharRef.current = null
+    setBpm(null)
+    setBpmConectado(false)
     toast('Sessão encerrada. Até logo!')
   }
 
@@ -516,15 +553,29 @@ export default function PortalAluno() {
     }
   }, [treinos, historicoTreinos])
 
-  // ----- Evolução do PSE (últimos 14 treinos concluídos) -----
+  // ----- Evolução do PSE por período (Semanal / Mensal / Anual) -----
   const pseSerie = useMemo(() => {
-    const pontos = historicoTreinos
-      .filter((h) => h.pse != null)
-      .slice(-14)
+    const agora = new Date()
+    const inicio = (() => {
+      if (periodoPse === 'semanal') {
+        const d = new Date()
+        d.setHours(0, 0, 0, 0)
+        const dia = (d.getDay() + 6) % 7 // segunda = 0
+        d.setDate(d.getDate() - dia)
+        return d
+      }
+      if (periodoPse === 'mensal') return new Date(agora.getFullYear(), agora.getMonth(), 1)
+      return new Date(agora.getFullYear(), 0, 1)
+    })()
+
+    const pontos = historicoTreinos.filter(
+      (h) => h.pse != null && new Date(h.data) >= inicio
+    )
     if (pontos.length === 0) return null
     const media = pontos.reduce((s, h) => s + Number(h.pse), 0) / pontos.length
-    return { pontos, media }
-  }, [historicoTreinos])
+    const ultimo = pontos[pontos.length - 1].pse
+    return { pontos, media, ultimo }
+  }, [historicoTreinos, periodoPse])
 
   // Insere o check-in com data/hora atual (com bloqueio de repetição no dia)
   const fazerCheckin = async () => {
@@ -607,6 +658,69 @@ export default function PortalAluno() {
   const alternarCronometro = () => {
     if (!aluno) return
     setCronometroAtivo((a) => !a)
+  }
+
+  // ===================================================================
+  // FREQUENCÍMETRO — Web Bluetooth (GATT Heart Rate: 0x180d / 0x2a37)
+  // ===================================================================
+  const aoLerBpm = (e: any) => {
+    const valor: DataView | undefined = e.target?.value
+    if (!valor) return
+    setBpm(extrairBpm(valor))
+  }
+
+  const conectarFrequencimetro = async () => {
+    const bt = (navigator as any)?.bluetooth
+    if (!bt) {
+      setBpmErro(
+        'Bluetooth não disponível neste navegador. Use Chrome/Edge (Android) com HTTPS.'
+      )
+      return
+    }
+    setBpmConectando(true)
+    setBpmErro('')
+    try {
+      const device = await bt.requestDevice({
+        filters: [{ services: ['heart_rate'] }] // serviço padrão de frequência cardíaca
+      })
+      device.addEventListener('gattserverdisconnected', () => {
+        setBpm(null)
+        setBpmConectado(false)
+        toast('Frequencímetro desconectado.', 'aviso')
+      })
+      const server = await device.gatt.connect()
+      const service = await server.getPrimaryService('heart_rate') // 0x180d
+      const characteristic = await service.getCharacteristic(
+        'heart_rate_measurement' // 0x2a37
+      )
+      await characteristic.startNotifications()
+      characteristic.addEventListener('characteristicvaluechanged', aoLerBpm)
+      bpmDeviceRef.current = device
+      bpmCharRef.current = characteristic
+      setBpmConectado(true)
+      toast('Frequencímetro conectado! ❤️')
+    } catch (e: any) {
+      // NotFoundError = usuário cancelou a seleção do dispositivo
+      if (e?.name !== 'NotFoundError') {
+        setBpmErro(e?.message || 'Falha ao conectar o frequencímetro.')
+      }
+    } finally {
+      setBpmConectando(false)
+    }
+  }
+
+  const desconectarFrequencimetro = async () => {
+    try {
+      await bpmCharRef.current?.stopNotifications?.()
+      bpmDeviceRef.current?.gatt?.disconnect()
+    } catch {
+      // ignora falhas ao desconectar
+    }
+    bpmDeviceRef.current = null
+    bpmCharRef.current = null
+    setBpm(null)
+    setBpmConectado(false)
+    toast('Frequencímetro desconectado.', 'aviso')
   }
 
   const dataHoje = new Date().toLocaleDateString('pt-BR', {
@@ -740,7 +854,7 @@ export default function PortalAluno() {
           </div>
         </header>
 
-        <main className="mx-auto mt-7 w-full max-w-md space-y-5 px-4">
+        <main className="mx-auto mt-6 w-full max-w-md space-y-4 px-4">
           {/* ---------- Card de Check-in ---------- */}
           <section className={`${VIDRO} p-6 text-center`}>
             <CardHeader icon={CalendarCheck} titulo="Check-in do Dia" />
@@ -839,6 +953,116 @@ export default function PortalAluno() {
                 Concluir Treino
               </button>
             </div>
+          </section>
+
+          {/* ---------- Frequencímetro (Web Bluetooth / BPM em tempo real) ---------- */}
+          <section className={`${VIDRO} p-6`}>
+            <CardHeader icon={Activity} titulo="Frequência Cardíaca">
+              {bpm != null && (
+                <span className="flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-2.5 py-1 text-[10px] font-bold text-emerald-300 ring-1 ring-inset ring-emerald-500/30">
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
+                  Ao vivo
+                </span>
+              )}
+            </CardHeader>
+
+            {bpm != null ? (
+              /* -------- Conectado: BPM ao vivo + pulso -------- */
+              <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-4 ring-1 ring-inset ring-white/5">
+                <div className="flex items-center gap-3.5">
+                  <span className="flex h-14 w-14 shrink-0 animate-pulse items-center justify-center rounded-full bg-rose-500/15 ring-1 ring-inset ring-rose-500/30">
+                    <Heart className="h-7 w-7 fill-rose-400 text-rose-400" />
+                  </span>
+                  <div>
+                    <p className="text-3xl font-extrabold tabular-nums leading-none text-white">
+                      {bpm}
+                    </p>
+                    <p className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-white/50">
+                      batimentos por minuto
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={desconectarFrequencimetro}
+                  className="rounded-full border border-white/15 bg-white/5 px-3.5 py-2 text-xs font-bold text-white/70 transition-all duration-300 hover:bg-white/10 hover:text-white active:scale-95"
+                >
+                  Desconectar
+                </button>
+              </div>
+            ) : (
+              /* -------- Desconectado / Conectando / Pareado aguardando sinal -------- */
+              <div className="text-center">
+                <div
+                  className={`mx-auto flex h-14 w-14 items-center justify-center rounded-full transition-colors ${
+                    bpmConectando
+                      ? 'bg-amber-500/15 ring-1 ring-inset ring-amber-500/30'
+                      : bpmConectado
+                        ? 'animate-pulse bg-emerald-500/15 ring-1 ring-inset ring-emerald-500/30'
+                        : 'bg-white/5 ring-1 ring-inset ring-white/10'
+                  }`}
+                >
+                  {bpmConectando ? (
+                    <Loader2 className="h-7 w-7 animate-spin text-amber-300" />
+                  ) : bpmConectado ? (
+                    <Heart className="h-6 w-6 fill-emerald-400 text-emerald-400" />
+                  ) : (
+                    <Bluetooth className="h-6 w-6 text-white/50" />
+                  )}
+                </div>
+
+                <p className="mt-3 text-sm font-bold text-white/90">
+                  {bpmConectando
+                    ? 'Conectando...'
+                    : bpmConectado
+                      ? 'Pareado · aguardando sinal'
+                      : 'Desconectado'}
+                </p>
+                <p className="mx-auto mt-1 max-w-xs text-xs leading-relaxed text-white/50">
+                  Use uma cinta cardíaca ou smartwatch compatível com Bluetooth
+                  Low Energy para acompanhar seus batimentos em tempo real
+                  durante o treino.
+                </p>
+
+                {bpmErro && !bpmConectado && (
+                  <p className="mt-2 text-[11px] font-medium text-red-300">
+                    {bpmErro}
+                  </p>
+                )}
+
+                {bpmConectado ? (
+                  <button
+                    onClick={desconectarFrequencimetro}
+                    className="mt-4 w-full rounded-2xl border border-white/15 bg-white/5 py-3.5 text-sm font-bold text-white/70 transition-all duration-300 hover:bg-white/10 hover:text-white active:scale-[0.97]"
+                  >
+                    Desconectar
+                  </button>
+                ) : (
+                  <button
+                    onClick={conectarFrequencimetro}
+                    disabled={bpmConectando || !bluetoothDisponivel}
+                    className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-rose-500 to-pink-600 py-3.5 text-sm font-extrabold text-white shadow-lg shadow-rose-500/30 ring-1 ring-inset ring-white/20 transition-all duration-300 hover:brightness-110 hover:shadow-rose-500/40 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {bpmConectando ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Bluetooth className="h-4 w-4" />
+                    )}
+                    {bpmConectando
+                      ? 'Conectando...'
+                      : bluetoothDisponivel
+                        ? 'Conectar Frequencímetro'
+                        : 'Bluetooth não suportado'}
+                  </button>
+                )}
+
+                {!bluetoothDisponivel && (
+                  <p className="mt-2 text-[11px] text-white/40">
+                    Requer HTTPS e navegador Chrome/Edge (Android ou Windows).
+                    iOS Safari não suporta Web Bluetooth.
+                  </p>
+                )}
+              </div>
+            )}
           </section>
 
           {/* ---------- Frequência por período (Semanal/Mensal/Anual) ---------- */}
@@ -1010,7 +1234,29 @@ export default function PortalAluno() {
 
           {/* ---------- Evolução do PSE ---------- */}
           <section className={`${VIDRO} p-6`}>
-            <CardHeader icon={TrendingUp} titulo="Evolução do PSE" />
+            <CardHeader icon={TrendingUp} titulo="Evolução do PSE">
+              <div className="flex rounded-full border border-white/10 bg-white/5 p-1 text-[11px] font-bold">
+                {(
+                  [
+                    ['semanal', 'Sem'],
+                    ['mensal', 'Mês'],
+                    ['anual', 'Ano']
+                  ] as const
+                ).map(([chave, rotulo]) => (
+                  <button
+                    key={chave}
+                    onClick={() => setPeriodoPse(chave)}
+                    className={`rounded-full px-3 py-1 transition-all duration-300 ${
+                      periodoPse === chave
+                        ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-md shadow-primary-900/40'
+                        : 'text-white/55 hover:text-white'
+                    }`}
+                  >
+                    {rotulo}
+                  </button>
+                ))}
+              </div>
+            </CardHeader>
             {pseSerie ? (
               <div>
                 <div className="mb-4 grid grid-cols-3 gap-2 rounded-2xl border border-white/10 bg-white/[0.04] p-3 text-center shadow-inner ring-1 ring-inset ring-white/5">
@@ -1024,7 +1270,7 @@ export default function PortalAluno() {
                   </div>
                   <div className="border-x border-white/10">
                     <p className="text-xl font-extrabold text-primary-300">
-                      {pseSerie.pontos[pseSerie.pontos.length - 1].pse}/10
+                      {pseSerie.ultimo}/10
                     </p>
                     <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-wide text-white/50">
                       Último treino
@@ -1035,13 +1281,13 @@ export default function PortalAluno() {
                       {pseSerie.pontos.length}
                     </p>
                     <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-wide text-white/50">
-                      Treinos na série
+                      Treinos no período
                     </p>
                   </div>
                 </div>
 
-                {/* Gráfico de linha SVG */}
-                <GraficoPse pontos={pseSerie.pontos} />
+                {/* Gráfico de linha SVG (últimos 14 do período) */}
+                <GraficoPse pontos={pseSerie.pontos.slice(-14)} />
               </div>
             ) : (
               <div className="py-10 text-center text-white/60">
@@ -1049,7 +1295,7 @@ export default function PortalAluno() {
                   <TrendingUp className="h-7 w-7 text-primary-400" />
                 </div>
                 <p className="text-sm font-semibold text-white/80">
-                  Nenhum treino concluído ainda
+                  Nenhum treino concluído no período
                 </p>
                 <p className="mt-1 text-xs text-white/50">
                   Ao finalizar um treino com o cronômetro, sua nota de esforço
