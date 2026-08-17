@@ -23,6 +23,8 @@ import {
   Phone,
   PlayCircle,
   Pause,
+  Play,
+  SkipForward,
   User,
   HeartPulse,
   CalendarDays,
@@ -49,6 +51,7 @@ type Exercicio = {
   repeticoes: string
   carga?: string
   url_video?: string
+  descanso?: number
 }
 
 type Treino = {
@@ -1375,24 +1378,41 @@ export default function PortalAluno() {
                   {treinoHoje && (treinoHoje.exercicios_json || []).length > 0 ? (
                     <ul className="space-y-2 p-4">
                       {(treinoHoje.exercicios_json || []).map((ex, i) => (
-                        <li key={i} className="rounded-2xl bg-white/10 px-3.5 py-2.5 backdrop-blur-sm">
-                          <div className="flex items-center justify-between gap-3">
-                            <div className="min-w-0">
-                              <p className="truncate text-sm font-bold">{ex.nome}</p>
-                              <p className="text-xs opacity-85">
-                                {ex.series} séries · {ex.repeticoes} reps
-                                {ex.carga ? ` · ${ex.carga}` : ''}
-                              </p>
-                            </div>
+                        <li
+                          key={i}
+                          className="overflow-hidden rounded-2xl bg-white/10 backdrop-blur-sm"
+                        >
+                          <div className="flex items-center justify-between gap-2 p-1.5">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setExecucaoAtiva({ treino: treinoHoje, indice: i })
+                              }
+                              className="flex min-w-0 flex-1 items-center justify-between gap-2 rounded-xl px-2 py-1.5 text-left transition-colors hover:bg-white/10 active:bg-white/15"
+                            >
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-bold">{ex.nome}</p>
+                                <p className="text-xs opacity-85">
+                                  {ex.series} séries · {ex.repeticoes} reps
+                                  {ex.carga ? ` · ${ex.carga}` : ''}
+                                  {ex.descanso ? ` · descanso ${ex.descanso}s` : ''}
+                                </p>
+                              </div>
+                              <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-white px-2.5 py-1 text-[10px] font-bold text-primary-700 shadow-sm transition-all duration-300 active:scale-95">
+                                <PlayCircle className="h-3 w-3" />
+                                Executar
+                              </span>
+                            </button>
                             {ex.url_video && (
                               <a
                                 href={ex.url_video}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-[11px] font-bold text-primary-700 shadow-sm transition-all duration-300 hover:bg-zinc-100 active:scale-95"
+                                className="inline-flex shrink-0 items-center gap-1 rounded-full bg-white/15 px-2.5 py-1.5 text-[10px] font-bold text-white/90 transition-all duration-300 hover:bg-white/25"
+                                title="Ver vídeo do exercício"
                               >
-                                <PlayCircle className="h-3.5 w-3.5" />
-                                Ver Vídeo
+                                <PlayCircle className="h-3 w-3" />
+                                Vídeo
                               </a>
                             )}
                           </div>
@@ -1478,6 +1498,7 @@ export default function PortalAluno() {
                             <p className="text-xs text-white/50">
                               {ex.series} séries · {ex.repeticoes} reps
                               {ex.carga ? ` · ${ex.carga}` : ''}
+                              {ex.descanso ? ` · descanso ${ex.descanso}s` : ''}
                             </p>
                           </div>
                           {ex.url_video && (
@@ -1568,6 +1589,15 @@ export default function PortalAluno() {
             )}
           </section>
         </main>
+
+        {/* ---------- Modal de Execução de Exercício (séries + descanso) ---------- */}
+        {execucaoAtiva && (
+          <ModalExecucao
+            treino={execucaoAtiva.treino}
+            indice={execucaoAtiva.indice}
+            onFechar={() => setExecucaoAtiva(null)}
+          />
+        )}
 
         {/* ---------- Modal de Feedback (Concluir Treino) ---------- */}
         {modalFeedback && (
@@ -1686,6 +1716,282 @@ export default function PortalAluno() {
             © {new Date().getFullYear()} {config.nome_academia} · Portal do Aluno
           </p>
         </footer>
+      </div>
+    </div>
+  )
+}
+
+// =====================================================================
+// MODAL DE EXECUÇÃO DE EXERCÍCIO
+// Mostra séries/repetições, controla o progresso das séries e dispara o
+// cronômetro de descanso definido pelo treinador. Ao encerrar, vibra e
+// toca um bipe para alertar o aluno da próxima série.
+// =====================================================================
+function ModalExecucao({
+  treino,
+  indice,
+  onFechar
+}: {
+  treino: Treino
+  indice: number
+  onFechar: () => void
+}) {
+  const exercicio: Exercicio = treino.exercicios_json[indice]
+  const totalSeries = Math.max(1, Number(exercicio.series) || 1)
+  const descansoDefinido = Math.max(0, Number(exercicio.descanso) || 60)
+
+  const [concluidas, setConcluidas] = useState(0)
+  const [descansando, setDescansando] = useState(false)
+  const [restante, setRestante] = useState(0)
+  const [pausado, setPausado] = useState(false)
+  const audioRef = useRef<AudioContext | null>(null)
+
+  // Cria/retoma o AudioContext dentro de um gesto do usuário (pré-requisito
+  // dos navegadores para emitir som sem interação prévia).
+  const garantirAudio = () => {
+    const Ctx =
+      (window as any).AudioContext || (window as any).webkitAudioContext
+    if (!Ctx) return
+    if (!audioRef.current) audioRef.current = new Ctx()
+    if (audioRef.current.state === 'suspended') audioRef.current.resume()
+  }
+
+  // Bipes sucessivos (Sobe o tom no final para diferenciar de outros sons)
+  const tocarBipe = () => {
+    const ctx = audioRef.current
+    if (!ctx) return
+    const agora = ctx.currentTime
+    ;[0, 0.35, 0.7].forEach((offset, i) => {
+      const osc = ctx.createOscillator()
+      const ganho = ctx.createGain()
+      osc.connect(ganho)
+      ganho.connect(ctx.destination)
+      osc.type = 'sine'
+      osc.frequency.value = i === 2 ? 880 : 660
+      ganho.gain.setValueAtTime(0, agora + offset)
+      ganho.gain.linearRampToValueAtTime(0.45, agora + offset + 0.02)
+      ganho.gain.linearRampToValueAtTime(0.0001, agora + offset + 0.3)
+      osc.start(agora + offset)
+      osc.stop(agora + offset + 0.32)
+    })
+  }
+
+  const vibrar = () => {
+    try {
+      if (navigator.vibrate) navigator.vibrate([300, 150, 300, 150, 450])
+    } catch {}
+    tocarBipe()
+  }
+
+  const iniciarDescanso = (duracao: number) => {
+    garantirAudio()
+    setRestante(duracao)
+    setDescansando(true)
+    setPausado(false)
+  }
+
+  // Contagem regressiva (1s)
+  useEffect(() => {
+    if (!descansando || pausado) return
+    const id = window.setInterval(() => {
+      setRestante((r) => (r <= 1 ? 0 : r - 1))
+    }, 1000)
+    return () => window.clearInterval(id)
+  }, [descansando, pausado])
+
+  // Quando zera: vibra e encerra o descanso, liberando a próxima série
+  useEffect(() => {
+    if (descansando && restante === 0) {
+      vibrar()
+      setDescansando(false)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [descansando, restante])
+
+  const concluirSerie = () => {
+    const novas = concluidas + 1
+    setConcluidas(novas)
+    if (novas < totalSeries) {
+      iniciarDescanso(descansoDefinido)
+    } else {
+      garantirAudio()
+      vibrar()
+    }
+  }
+
+  const pularDescanso = () => {
+    setDescansando(false)
+    setRestante(0)
+  }
+
+  const formatarContagem = (s: number) => {
+    const m = Math.floor(s / 60)
+    const r = s % 60
+    return `${m}:${String(r).padStart(2, '0')}`
+  }
+
+  const progresso =
+    descansoDefinido > 0
+      ? Math.min(100, (restante / descansoDefinido) * 100)
+      : 100
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-0 backdrop-blur-md sm:items-center sm:p-4"
+      onClick={onFechar}
+    >
+      <div
+        className="flex max-h-[92vh] w-full max-w-md flex-col overflow-hidden rounded-t-3xl border border-white/[0.08] bg-[#161616] shadow-[0_24px_64px_rgba(0,0,0,0.6)] ring-1 ring-inset ring-white/[0.06] backdrop-blur-2xl sm:rounded-3xl"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+      >
+        <div className="flex items-center justify-between px-6 py-4">
+          <div className="flex items-center gap-3">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary-500/15 text-primary-300 ring-1 ring-inset ring-primary-500/25">
+              <Dumbbell className="h-4 w-4" />
+            </span>
+            <div>
+              <h2 className="text-base font-bold text-white">{exercicio.nome}</h2>
+              <p className="text-xs text-white/50">
+                {totalSeries} séries · {exercicio.repeticoes} reps
+                {exercicio.carga ? ` · ${exercicio.carga}` : ''}
+                {exercicio.descanso ? ` · descanso ${exercicio.descanso}s` : ''}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onFechar}
+            className="rounded-full p-2 text-white/50 transition-all duration-300 hover:bg-white/10 hover:text-white active:scale-90"
+            aria-label="Fechar"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="space-y-5 overflow-y-auto px-6 pb-6 pt-2">
+          {/* Progresso das séries */}
+          <div>
+            <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-white/50">
+              Séries
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {Array.from({ length: totalSeries }).map((_, i) => {
+                const feita = i < concluidas
+                const atual = i === concluidas
+                return (
+                  <div
+                    key={i}
+                    className={`flex h-16 w-14 flex-col items-center justify-center rounded-2xl border text-xs font-bold transition-all duration-300 ${
+                      feita
+                        ? 'border-emerald-400/60 bg-emerald-500/15 text-emerald-300'
+                        : atual
+                          ? 'border-primary-400/60 bg-primary-500/15 text-primary-200 ring-1 ring-inset ring-primary-400/40'
+                          : 'border-white/10 bg-white/[0.04] text-white/40'
+                    }`}
+                  >
+                    {feita ? (
+                      <CheckCircle2 className="mb-0.5 h-4 w-4" />
+                    ) : (
+                      <span className="text-sm font-extrabold">{i + 1}</span>
+                    )}
+                    {feita ? 'Feita' : atual ? 'Atual' : ''}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Cronômetro de descanso */}
+          {descansando ? (
+            <div
+              className={`rounded-2xl border p-4 text-center transition-colors ${
+                restante <= 5
+                  ? 'border-emerald-400/50 bg-emerald-500/10'
+                  : 'border-white/10 bg-white/[0.04]'
+              }`}
+            >
+              <div className="mx-auto mb-2 flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-wider text-white/50">
+                <Timer className="h-3.5 w-3.5" />
+                Descanso
+              </div>
+              <p className="text-5xl font-extrabold tabular-nums tracking-tight text-white">
+                {formatarContagem(restante)}
+              </p>
+              <div className="mx-auto mt-3 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+                <div
+                  className="h-full rounded-full bg-primary-500 transition-all duration-1000 ease-linear"
+                  style={{ width: `${progresso}%` }}
+                />
+              </div>
+              <p className="mt-2 text-xs text-white/50">
+                {pausado
+                  ? 'Pausado'
+                  : restante <= 5
+                    ? 'Se prepara — a próxima série já vem!'
+                    : 'Respire e prepare a próxima série...'}
+              </p>
+              <div className="mt-3 flex justify-center gap-2">
+                <button
+                  onClick={() => setPausado((p) => !p)}
+                  className="flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-4 py-2 text-xs font-bold text-white/80 transition-all duration-300 hover:bg-white/10 active:scale-95"
+                >
+                  {pausado ? <Play className="h-3 w-3" /> : <Pause className="h-3 w-3" />}
+                  {pausado ? 'Retomar' : 'Pausar'}
+                </button>
+                <button
+                  onClick={pularDescanso}
+                  className="flex items-center gap-1.5 rounded-full border border-white/15 bg-white/5 px-4 py-2 text-xs font-bold text-white/80 transition-all duration-300 hover:bg-white/10 active:scale-95"
+                >
+                  <SkipForward className="h-3 w-3" />
+                  Pular
+                </button>
+              </div>
+            </div>
+          ) : concluidas >= totalSeries ? (
+            <div className="rounded-2xl border border-emerald-400/50 bg-emerald-500/10 p-5 text-center">
+              <CheckCircle2 className="mx-auto h-10 w-10 text-emerald-400" />
+              <p className="mt-2 text-lg font-extrabold text-white">
+                Exercício concluído!
+              </p>
+              <p className="mt-1 text-xs text-white/60">
+                Todas as {totalSeries} séries finalizadas. Bora pro próximo!
+              </p>
+            </div>
+          ) : (
+            <button
+              onClick={concluirSerie}
+              className="w-full rounded-2xl bg-gradient-to-r from-primary-500 to-primary-600 py-4 text-sm font-extrabold text-white shadow-lg shadow-primary-500/30 ring-1 ring-inset ring-white/20 transition-all duration-300 hover:brightness-110 active:scale-[0.98]"
+            >
+              {concluidas === 0
+                ? 'Começar 1ª série'
+                : `Concluir ${concluidas}ª série`}
+            </button>
+          )}
+
+          {/* Rodapé do modal */}
+          <div className="flex gap-2.5 pt-1">
+            {exercicio.url_video && (
+              <a
+                href={exercicio.url_video}
+                target="_blank"
+                rel="noreferrer"
+                className="flex flex-1 items-center justify-center gap-1.5 rounded-2xl border border-white/15 bg-white/5 py-3 text-sm font-bold text-white/70 transition-all duration-300 hover:bg-white/10 active:scale-[0.97]"
+              >
+                <PlayCircle className="h-4 w-4 text-primary-400" />
+                Ver Vídeo
+              </a>
+            )}
+            <button
+              onClick={onFechar}
+              className={`${
+                exercicio.url_video ? 'flex-1' : 'w-full'
+              } rounded-2xl border border-white/15 bg-white/5 py-3 text-sm font-bold text-white/70 transition-all duration-300 hover:bg-white/10 active:scale-[0.97]`}
+            >
+              Fechar
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   )
