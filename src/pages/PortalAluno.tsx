@@ -304,6 +304,8 @@ export default function PortalAluno() {
   const [modalAberto, setModalAberto] = useState<string | null>(null)
   const [execucaoAtiva, setExecucaoAtiva] = useState<{ treino: Treino; indice: number } | null>(null)
 
+  const aluno = sessao?.aluno ?? null
+
   // ---------- Perfil do aluno ----------
   const [perfilEditando, setPerfilEditando] = useState(false)
   const [perfilDados, setPerfilDados] = useState({
@@ -320,8 +322,6 @@ export default function PortalAluno() {
   const [cartaoValidade, setCartaoValidade] = useState('')
   const [cartaoCvv, setCartaoCvv] = useState('')
   const [cartaoParcelas, setCartaoParcelas] = useState(1)
-
-  const aluno = sessao?.aluno ?? null
 
   // ===================================================================
   // LOGIN — valida CPF ou telefone na tabela "alunos" do Supabase
