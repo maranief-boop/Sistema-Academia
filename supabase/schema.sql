@@ -148,6 +148,39 @@ create table if not exists public.historico_treinos (
 create index if not exists historico_treinos_aluno_idx on public.historico_treinos (aluno_id, data desc);
 
 -- ---------------------------------------------------------------------
+-- Tabela: pagamentos (recibos por competência no Portal do Aluno)
+-- status: aberto | pago | atrasado   |   forma: pix | cartao
+-- ---------------------------------------------------------------------
+create table if not exists public.pagamentos (
+  id             uuid primary key default gen_random_uuid(),
+  aluno_id       uuid not null references public.alunos(id) on delete cascade,
+  competencia    text not null,            -- "2026-08"
+  valor          numeric(10,2) not null default 0,
+  status         text not null default 'aberto',
+  forma          text,
+  data_pagamento timestamptz,
+  created_at     timestamptz not null default now(),
+  constraint pagamentos_status_check check (status in ('aberto', 'pago', 'atrasado'))
+);
+
+create index if not exists pagamentos_aluno_idx on public.pagamentos (aluno_id, competencia desc);
+
+-- ---------------------------------------------------------------------
+-- Tabela: avaliacoes (avaliação física do aluno)
+-- medidas_json: { "Peso": "72 kg", "Altura": "1,74 m", "% Gordura": "18", ... }
+-- ---------------------------------------------------------------------
+create table if not exists public.avaliacoes (
+  id            uuid primary key default gen_random_uuid(),
+  aluno_id      uuid not null references public.alunos(id) on delete cascade,
+  data          date not null default current_date,
+  medidas_json  jsonb not null default '{}'::jsonb,
+  observacoes   text,
+  created_at    timestamptz not null default now()
+);
+
+create index if not exists avaliacoes_aluno_idx on public.avaliacoes (aluno_id, data desc);
+
+-- ---------------------------------------------------------------------
 -- Tabela: configuracoes (identidade visual White-Label — linha única id = 1)
 -- ---------------------------------------------------------------------
 create table if not exists public.configuracoes (
@@ -213,6 +246,8 @@ create table if not exists public.macrociclo (
 alter table public.alunos disable row level security;
 alter table public.leads disable row level security;
 alter table public.historico_treinos disable row level security;
+alter table public.pagamentos disable row level security;
+alter table public.avaliacoes disable row level security;
 
 -- IMPORTANTE: recarrega o cache de schema do PostgREST para que as colunas
 -- e tabelas novas (treinos.dias_semana, treinos.restricoes, exercicios_base,

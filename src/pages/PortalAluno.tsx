@@ -15,17 +15,25 @@ import {
   CalendarCheck,
   CheckCircle2,
   ChevronDown,
+  ClipboardList,
+  Copy,
+  CreditCard,
   Dumbbell,
   Heart,
   ListTree,
   Loader2,
   LogOut,
+  Maximize2,
   Phone,
   PlayCircle,
   Pause,
   Play,
+  QrCode,
+  Save,
   SkipForward,
+  Stethoscope,
   User,
+  Wallet,
   HeartPulse,
   CalendarDays,
   Timer,
@@ -33,6 +41,7 @@ import {
   X
 } from 'lucide-react'
 import fundoAcademia from '../assets/fundo.png'
+import { formatarMoeda, formatarData, dataParaInput } from '../utils/format'
 
 type Aluno = {
   id: string
@@ -41,6 +50,8 @@ type Aluno = {
   cpf?: string | null
   plano_valor?: number
   status_pagamento?: string
+  forma_pagamento?: string | null
+  data_ultimo_pagamento?: string | null
   data_vencimento?: string | null
   created_at?: string
 }
@@ -87,6 +98,18 @@ function extrairBpm(valor: DataView): number {
   return em16Bits ? valor.getUint16(1, true) : valor.getUint8(1)
 }
 
+// CRC16-CCITT (polinômio 0x1021) usado no campo "6304" do Pix copia e cola
+function crc16Pix(payload: string): string {
+  let crc = 0xffff
+  for (let i = 0; i < payload.length; i++) {
+    crc ^= payload.charCodeAt(i) << 8
+    for (let j = 0; j < 8; j++) {
+      crc = crc & 0x8000 ? ((crc << 1) ^ 0x1021) & 0xffff : (crc << 1) & 0xffff
+    }
+  }
+  return crc.toString(16).toUpperCase().padStart(4, '0')
+}
+
 // Estilo "vidro fosco" premium usado nos cards principais
 const VIDRO =
   'rounded-3xl border border-white/[0.08] bg-zinc-900/85 shadow-[0_8px_32px_rgba(0,0,0,0.45)] ring-1 ring-inset ring-white/[0.06] backdrop-blur-2xl'
@@ -112,6 +135,99 @@ function CardHeader({
         </h2>
       </div>
       {children}
+    </div>
+  )
+}
+
+// Tile compacto (2 colunas) — clicar abre o modal expandido
+function TileCard({
+  icon: Icone,
+  titulo,
+  valor,
+  subtitulo,
+  cor = 'primary',
+  onAbrir
+}: {
+  icon: any
+  titulo: string
+  valor?: string
+  subtitulo?: string
+  cor?: 'primary' | 'emerald' | 'amber' | 'rose'
+  onAbrir: () => void
+}) {
+  const cores: Record<string, string> = {
+    primary: 'bg-primary-500/15 text-primary-300 ring-primary-500/25',
+    emerald: 'bg-emerald-500/15 text-emerald-300 ring-emerald-500/25',
+    amber: 'bg-amber-500/15 text-amber-300 ring-amber-500/25',
+    rose: 'bg-rose-500/15 text-rose-300 ring-rose-500/25'
+  }
+  return (
+    <button
+      type="button"
+      onClick={onAbrir}
+      className="group flex flex-col gap-1.5 rounded-2xl border border-white/10 bg-white/[0.08] p-3.5 text-left backdrop-blur-lg transition-all duration-300 hover:border-white/25 hover:bg-white/[0.12] active:scale-[0.97]"
+    >
+      <div className="flex items-center justify-between">
+        <span
+          className={`flex h-9 w-9 items-center justify-center rounded-xl ring-1 ring-inset ${cores[cor]}`}
+        >
+          <Icone className="h-4 w-4" />
+        </span>
+        <Maximize2 className="h-3.5 w-3.5 text-white/25 transition-all duration-300 group-hover:text-white/60" />
+      </div>
+      <p className="mt-1 text-[10px] font-bold uppercase tracking-wide text-white/50">
+        {titulo}
+      </p>
+      {valor && <p className="text-sm font-extrabold leading-tight text-white">{valor}</p>}
+      {subtitulo && (
+        <p className="text-[10px] leading-snug text-white/40">{subtitulo}</p>
+      )}
+    </button>
+  )
+}
+
+// Modal expansível (aumenta na tela ao clicar no tile)
+function ModalExpandido({
+  titulo,
+  icon: Icone,
+  onFechar,
+  children,
+  largura = 'max-w-md'
+}: {
+  titulo: string
+  icon: any
+  onFechar: () => void
+  children: ReactNode
+  largura?: string
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-0 backdrop-blur-md sm:items-center sm:p-4"
+      onClick={onFechar}
+    >
+      <div
+        className={`flex max-h-[92vh] w-full ${largura} flex-col overflow-hidden rounded-t-3xl border border-white/[0.08] bg-[#161616] shadow-[0_24px_64px_rgba(0,0,0,0.6)] ring-1 ring-inset ring-white/[0.06] backdrop-blur-2xl sm:rounded-3xl`}
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+      >
+        <div className="flex items-center justify-between px-6 py-4">
+          <div className="flex items-center gap-3">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary-500/15 text-primary-300 ring-1 ring-inset ring-primary-500/25">
+              <Icone className="h-4 w-4" />
+            </span>
+            <h2 className="text-base font-bold text-white">{titulo}</h2>
+          </div>
+          <button
+            onClick={onFechar}
+            className="rounded-full p-2 text-white/50 transition-all duration-300 hover:bg-white/10 hover:text-white active:scale-90"
+            aria-label="Fechar"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="space-y-5 overflow-y-auto px-6 pb-6 pt-1">{children}</div>
+      </div>
     </div>
   )
 }
@@ -327,6 +443,30 @@ export default function PortalAluno() {
   const [cartaoCvv, setCartaoCvv] = useState('')
   const [cartaoParcelas, setCartaoParcelas] = useState(1)
 
+  // ---------- Pagamentos recebidos (histórico por competência) ----------
+  const [pagamentos, setPagamentos] = useState<any[]>([])
+  const [salvandoPerfil, setSalvandoPerfil] = useState(false)
+
+  // ---------- Avaliação física ----------
+  const [avaliacao, setAvaliacao] = useState<any>(null)
+
+  // Competência atual (ex.: "2026-08")
+  const competenciaAtual = (() => {
+    const h = new Date()
+    return `${h.getFullYear()}-${String(h.getMonth() + 1).padStart(2, '0')}`
+  })()
+
+  const pagamentoMesAtualPago = pagamentos.some(
+    (p) => p.competencia === competenciaAtual && p.status === 'pago'
+  )
+
+  // Status do pagamento atual (para card + tile)
+  const statusPagamentoAtual = pagamentoMesAtualPago
+    ? { rotulo: 'Pago', cor: 'emerald' }
+    : aluno?.status_pagamento === 'inadimplente'
+      ? { rotulo: 'Atrasado', cor: 'red' }
+      : { rotulo: 'Aberto', cor: 'amber' }
+
   // ===================================================================
   // LOGIN — valida CPF ou telefone na tabela "alunos" do Supabase
   // ===================================================================
@@ -481,12 +621,52 @@ export default function PortalAluno() {
     }
   }, [aluno])
 
+  // Carrega os pagamentos do aluno (histórico por competência)
+  const carregarPagamentos = useCallback(async () => {
+    if (!aluno) {
+      setPagamentos([])
+      return
+    }
+    try {
+      const { data, error } = await supabase
+        .from('pagamentos')
+        .select('*')
+        .eq('aluno_id', aluno.id)
+        .order('competencia', { ascending: false })
+        .limit(12)
+      if (!error) setPagamentos((data as any[]) || [])
+    } catch {
+      setPagamentos([])
+    }
+  }, [aluno])
+
+  // Carrega a última avaliação física do aluno
+  const carregarAvaliacao = useCallback(async () => {
+    if (!aluno) {
+      setAvaliacao(null)
+      return
+    }
+    try {
+      const { data, error } = await supabase
+        .from('avaliacoes')
+        .select('*')
+        .eq('aluno_id', aluno.id)
+        .order('data', { ascending: false })
+        .limit(1)
+      if (!error && data?.length) setAvaliacao(data[0])
+    } catch {
+      setAvaliacao(null)
+    }
+  }, [aluno])
+
   useEffect(() => {
     if (aluno) {
       verificarCheckinHoje()
       carregarFicha()
       carregarMacrociclo()
       carregarHistorico()
+      carregarPagamentos()
+      carregarAvaliacao()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aluno?.id])
@@ -494,6 +674,180 @@ export default function PortalAluno() {
   const ORDEM = [1, 2, 3, 4, 5, 6, 0] // Seg/Segunda → Dom/Sábado
   const ROTULOS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
   const MESES_ROTULO = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
+
+  // ---------- Perfil: salvar dados do aluno ----------
+  const salvarPerfil = async () => {
+    if (!aluno) return
+    if (!perfilDados.nome.trim()) {
+      toast('Informe seu nome.', 'aviso')
+      return
+    }
+    const digTel = perfilDados.telefone.replace(/\D/g, '')
+    if (digTel && digTel.length < 8) {
+      toast('Telefone inválido.', 'aviso')
+      return
+    }
+    setSalvandoPerfil(true)
+    try {
+      const atualizado = {
+        nome: perfilDados.nome.trim(),
+        telefone: perfilDados.telefone.trim(),
+        cpf: perfilDados.cpf.trim()
+      }
+      const { data, error } = await supabase
+        .from('alunos')
+        .update(atualizado)
+        .eq('id', aluno.id)
+        .select('*')
+        .single()
+      if (error) throw error
+      const nova: Sessao = {
+        aluno: data,
+        logadaEm: sessao?.logadaEm || new Date().toISOString()
+      }
+      localStorage.setItem(CHAVE_SESSAO, JSON.stringify(nova))
+      setSessao(nova)
+      setPerfilEditando(false)
+      toast('Perfil atualizado!')
+    } catch (e: any) {
+      toast(e?.message || 'Erro ao salvar o perfil.', 'erro')
+    } finally {
+      setSalvandoPerfil(false)
+    }
+  }
+
+  // ---------- Pagamentos: PIX (copia e cola) ----------
+  const pixCopiaECola = useMemo(() => {
+    if (!aluno) return ''
+    const chave = `pix.${(aluno.cpf || aluno.telefone || 'aluno')
+      .replace(/\D/g, '')
+      .slice(0, 11)}`
+    const valor = (Number(aluno.plano_valor) || 0).toFixed(2)
+    const nome = (config.nome_academia || 'Academia').slice(0, 25)
+    const gui41 =
+      '0014BR.GOV.BCB.PIX' + String(chave.length).padStart(2, '0') + chave
+    const semCrc =
+      '00020126' +
+      String(gui41.length).padStart(2, '0') +
+      gui41 +
+      '52040000530398654' +
+      String(valor.length).padStart(2, '0') +
+      valor +
+      '5802BR59' +
+      String(nome.length).padStart(2, '0') +
+      nome
+    return semCrc + '6304' + crc16Pix(semCrc + '6304')
+  }, [aluno, config])
+
+  const copiarPix = async () => {
+    try {
+      await navigator.clipboard.writeText(pixCopiaECola)
+      setPixCopiado(true)
+      toast('Pix copiado!')
+    } catch {
+      toast('Não foi possível copiar.', 'aviso')
+    }
+  }
+
+  // ---------- Pagamentos: registro do recibo (pix ou cartão) ----------
+  const registrarPagamento = async (forma: 'pix' | 'cartao') => {
+    if (!aluno) return
+    const hoje = dataParaInput()
+    const { error } = await supabase.from('pagamentos').insert({
+      aluno_id: aluno.id,
+      competencia: competenciaAtual,
+      valor: Number(aluno.plano_valor) || 0,
+      status: 'pago',
+      forma,
+      data_pagamento: new Date().toISOString()
+    })
+    if (error) throw new Error(error.message || 'Erro ao registrar o pagamento.')
+    const { error: erroAluno } = await supabase
+      .from('alunos')
+      .update({
+        status_pagamento: 'em_dia',
+        data_ultimo_pagamento: hoje,
+        forma_pagamento: forma === 'pix' ? 'Pix' : 'Cartão'
+      })
+      .eq('id', aluno.id)
+    if (erroAluno) throw new Error(erroAluno.message)
+    const novoAluno = {
+      ...aluno,
+      status_pagamento: 'em_dia',
+      data_ultimo_pagamento: hoje,
+      forma_pagamento: forma === 'pix' ? 'Pix' : 'Cartão'
+    }
+    const nova: Sessao = {
+      aluno: novoAluno,
+      logadaEm: sessao?.logadaEm || new Date().toISOString()
+    }
+    localStorage.setItem(CHAVE_SESSAO, JSON.stringify(nova))
+    setSessao(nova)
+    await carregarPagamentos()
+  }
+
+  const confirmarPix = async () => {
+    setCartaoProcessing(true)
+    try {
+      await registrarPagamento('pix')
+      setPixCopiado(false)
+      setFormaPagamentoAtiva(null)
+      toast('Pagamento confirmado. Obrigado!')
+    } catch (e: any) {
+      toast(e?.message || 'Erro ao confirmar o Pix.', 'erro')
+    } finally {
+      setCartaoProcessing(false)
+    }
+  }
+
+  const pagarCartao = async () => {
+    const num = cartaoNumero.replace(/\D/g, '')
+    if (num.length < 13) {
+      toast('Número do cartão inválido.', 'aviso')
+      return
+    }
+    if (!/^\d{2}\/\d{2}$/.test(cartaoValidade)) {
+      toast('Validade inválida (use MM/AA).', 'aviso')
+      return
+    }
+    if (cartaoCvv.replace(/\D/g, '').length < 3) {
+      toast('CVV inválido.', 'aviso')
+      return
+    }
+    setCartaoProcessing(true)
+    setTimeout(async () => {
+      try {
+        await registrarPagamento('cartao')
+        setFormaPagamentoAtiva(null)
+        setCartaoNumero('')
+        setCartaoValidade('')
+        setCartaoCvv('')
+        setCartaoParcelas(1)
+        toast('Pagamento aprovado. Obrigado!')
+      } catch (e: any) {
+        toast(e?.message || 'Erro ao processar o pagamento.', 'erro')
+      } finally {
+        setCartaoProcessing(false)
+      }
+    }, 1500)
+  }
+
+  const FORMATAR_COMPETENCIA = (comp: string) => {
+    const [ano, mes] = comp.split('-')
+    return `${MESES_ROTULO[Number(mes) - 1] || mes}/${ano}`
+  }
+
+  const CORES_STATUS_PAG: Record<string, string> = {
+    pago: 'bg-emerald-500/15 text-emerald-300 ring-emerald-500/30',
+    aberto: 'bg-amber-500/15 text-amber-300 ring-amber-500/30',
+    atrasado: 'bg-red-500/15 text-red-300 ring-red-500/30'
+  }
+
+  const ROTULO_STATUS_ALUNO: Record<string, string> = {
+    em_dia: 'Em dia',
+    vencendo: 'Vencendo',
+    inadimplente: 'Atrasado'
+  }
 
   const normalizar = (s) =>
     (s || '')
@@ -916,52 +1270,89 @@ export default function PortalAluno() {
         </header>
 
         <main className="mx-auto mt-6 w-full max-w-md space-y-4 px-4">
-          {/* ---------- Card de Check-in ---------- */}
-          <section className={`${VIDRO} p-6 text-center`}>
-            <CardHeader icon={CalendarCheck} titulo="Check-in do Dia" />
-            <p className="text-xs font-medium capitalize text-white/60">
-              {dataHoje}
-            </p>
+          {/* ---------- Grade 1: Check-in + Frequência Cardíaca ---------- */}
+          <div className="grid grid-cols-2 gap-3">
+            <TileCard
+              icon={CalendarCheck}
+              titulo="Check-in do Dia"
+              valor={jaCheckinHoje || checkinSucesso ? 'Feito' : 'Pendente'}
+              subtitulo={dataHoje}
+              cor={jaCheckinHoje || checkinSucesso ? 'emerald' : 'primary'}
+              onAbrir={() => setModalAberto('checkin')}
+            />
+            <TileCard
+              icon={Activity}
+              titulo="Frequência Cardíaca"
+              valor={bpm != null ? `${bpm} BPM` : bpmConectado ? 'Pareado' : 'Offline'}
+              subtitulo="Medidor Bluetooth"
+              cor={bpm != null ? 'rose' : 'primary'}
+              onAbrir={() => setModalAberto('frequencimetro')}
+            />
+          </div>
 
-            {jaCheckinHoje || checkinSucesso ? (
-              // Feedback visual de sucesso + botão desabilitado (sempre visível)
-              <div className="py-2">
-                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border border-emerald-400/40 bg-emerald-500/15 shadow-lg shadow-emerald-500/20 ring-4 ring-emerald-500/10">
-                  <CheckCircle2 className="h-8 w-8 text-emerald-400" />
-                </div>
-                <p className="mt-3 font-bold text-white">
-                  Check-in realizado com sucesso!
-                </p>
-                <p className="mt-0.5 text-sm text-white/60">
-                  Você já treinou hoje. Nos vemos amanhã! 💪
-                </p>
-                <button
-                  disabled
-                  className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 py-4 text-base font-extrabold text-white/35"
-                >
-                  <CheckCircle2 className="h-5 w-5" />
-                  Check-in já realizado hoje
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={fazerCheckin}
-                disabled={registrando || verificandoCheckin}
-                className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-primary-500 to-primary-700 py-4 text-base font-extrabold text-white shadow-lg shadow-primary-500/30 ring-1 ring-inset ring-white/20 transition-all duration-300 hover:brightness-110 hover:shadow-primary-500/40 active:scale-[0.97] disabled:opacity-60"
-              >
-                {registrando || verificandoCheckin ? (
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                ) : (
-                  <CalendarCheck className="h-5 w-5" />
-                )}
-                {registrando
-                  ? 'Registrando...'
-                  : verificandoCheckin
-                    ? 'Verificando presença...'
-                    : 'Fazer Check-in Agora'}
-              </button>
-            )}
-          </section>
+          {/* ---------- Grade 2: Evolução do PSE + Frequência ---------- */}
+          <div className="grid grid-cols-2 gap-3">
+            <TileCard
+              icon={TrendingUp}
+              titulo="Evolução do PSE"
+              valor={pseSerie ? pseSerie.media.toFixed(1).replace('.', ',') : '—'}
+              subtitulo="Média de esforço"
+              onAbrir={() => setModalAberto('pse')}
+            />
+            <TileCard
+              icon={CalendarDays}
+              titulo="Frequência"
+              valor={`${frequenciaPeriodo.semanal.total} treino(s)`}
+              subtitulo="Nesta semana"
+              cor="emerald"
+              onAbrir={() => setModalAberto('frequencia')}
+            />
+          </div>
+
+          {/* ---------- Grade 3: Pagamentos + Perfil ---------- */}
+          <div className="grid grid-cols-2 gap-3">
+            <TileCard
+              icon={Wallet}
+              titulo="Pagamentos"
+              valor={statusPagamentoAtual.rotulo}
+              subtitulo={`${formatarMoeda(aluno.plano_valor)} · ${competenciaAtual}`}
+              cor={
+                statusPagamentoAtual.cor === 'emerald'
+                  ? 'emerald'
+                  : statusPagamentoAtual.cor === 'red'
+                    ? 'rose'
+                    : 'amber'
+              }
+              onAbrir={() => setModalAberto('pagamento')}
+            />
+            <TileCard
+              icon={User}
+              titulo="Perfil"
+              valor={aluno.nome.split(' ')[0]}
+              subtitulo="Editar meus dados"
+              onAbrir={() => setModalAberto('perfil')}
+            />
+          </div>
+
+          {/* ---------- Grade 4: Matrícula + Avaliação Física ---------- */}
+          <div className="grid grid-cols-2 gap-3">
+            <TileCard
+              icon={ClipboardList}
+              titulo="Matrícula"
+              valor={formatarMoeda(aluno.plano_valor)}
+              subtitulo="Meu plano contratado"
+              cor="amber"
+              onAbrir={() => setModalAberto('matricula')}
+            />
+            <TileCard
+              icon={Stethoscope}
+              titulo="Avaliação Física"
+              valor={avaliacao ? formatarData(avaliacao.data) : '—'}
+              subtitulo={avaliacao ? 'Última avaliação' : 'Ver minha avaliação'}
+              cor="rose"
+              onAbrir={() => setModalAberto('avaliacao')}
+            />
+          </div>
 
           {/* ---------- Cronômetro de Treino ---------- */}
           <section className={`${VIDRO} p-6 text-center`}>
@@ -1014,356 +1405,6 @@ export default function PortalAluno() {
                 Concluir Treino
               </button>
             </div>
-          </section>
-
-          {/* ---------- Frequencímetro (Web Bluetooth / BPM em tempo real) ---------- */}
-          <section className={`${VIDRO} p-6`}>
-            <CardHeader icon={Activity} titulo="Frequência Cardíaca">
-              {bpm != null && (
-                <span className="flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-2.5 py-1 text-[10px] font-bold text-emerald-300 ring-1 ring-inset ring-emerald-500/30">
-                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
-                  Ao vivo
-                </span>
-              )}
-            </CardHeader>
-
-            {bpm != null ? (
-              /* -------- Conectado: BPM ao vivo + pulso -------- */
-              <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-4 ring-1 ring-inset ring-white/5">
-                <div className="flex items-center gap-3.5">
-                  <span className="flex h-14 w-14 shrink-0 animate-pulse items-center justify-center rounded-full bg-rose-500/15 ring-1 ring-inset ring-rose-500/30">
-                    <Heart className="h-7 w-7 fill-rose-400 text-rose-400" />
-                  </span>
-                  <div>
-                    <p className="text-3xl font-extrabold tabular-nums leading-none text-white">
-                      {bpm}
-                    </p>
-                    <p className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-white/50">
-                      batimentos por minuto
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={desconectarFrequencimetro}
-                  className="rounded-full border border-white/15 bg-white/5 px-3.5 py-2 text-xs font-bold text-white/70 transition-all duration-300 hover:bg-white/10 hover:text-white active:scale-95"
-                >
-                  Desconectar
-                </button>
-              </div>
-            ) : (
-              /* -------- Desconectado / Conectando / Pareado aguardando sinal -------- */
-              <div className="text-center">
-                <div
-                  className={`mx-auto flex h-14 w-14 items-center justify-center rounded-full transition-colors ${
-                    bpmConectando
-                      ? 'bg-amber-500/15 ring-1 ring-inset ring-amber-500/30'
-                      : bpmConectado
-                        ? 'animate-pulse bg-emerald-500/15 ring-1 ring-inset ring-emerald-500/30'
-                        : 'bg-white/5 ring-1 ring-inset ring-white/10'
-                  }`}
-                >
-                  {bpmConectando ? (
-                    <Loader2 className="h-7 w-7 animate-spin text-amber-300" />
-                  ) : bpmConectado ? (
-                    <Heart className="h-6 w-6 fill-emerald-400 text-emerald-400" />
-                  ) : (
-                    <Bluetooth className="h-6 w-6 text-white/50" />
-                  )}
-                </div>
-
-                <p className="mt-3 text-sm font-bold text-white/90">
-                  {bpmConectando
-                    ? 'Conectando...'
-                    : bpmConectado
-                      ? 'Pareado · aguardando sinal'
-                      : 'Desconectado'}
-                </p>
-                <p className="mx-auto mt-1 max-w-xs text-xs leading-relaxed text-white/50">
-                  Use uma cinta cardíaca ou smartwatch compatível com Bluetooth
-                  Low Energy para acompanhar seus batimentos em tempo real
-                  durante o treino.
-                </p>
-
-                {bpmErro && !bpmConectado && (
-                  <p className="mt-2 text-[11px] font-medium text-red-300">
-                    {bpmErro}
-                  </p>
-                )}
-
-                {bpmConectado ? (
-                  <button
-                    onClick={desconectarFrequencimetro}
-                    className="mt-4 w-full rounded-2xl border border-white/15 bg-white/5 py-3.5 text-sm font-bold text-white/70 transition-all duration-300 hover:bg-white/10 hover:text-white active:scale-[0.97]"
-                  >
-                    Desconectar
-                  </button>
-                ) : (
-                  <button
-                    onClick={conectarFrequencimetro}
-                    disabled={bpmConectando || !bluetoothDisponivel}
-                    className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-rose-500 to-pink-600 py-3.5 text-sm font-extrabold text-white shadow-lg shadow-rose-500/30 ring-1 ring-inset ring-white/20 transition-all duration-300 hover:brightness-110 hover:shadow-rose-500/40 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {bpmConectando ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Bluetooth className="h-4 w-4" />
-                    )}
-                    {bpmConectando
-                      ? 'Conectando...'
-                      : bluetoothDisponivel
-                        ? 'Conectar Frequencímetro'
-                        : 'Bluetooth não suportado'}
-                  </button>
-                )}
-
-                {!bluetoothDisponivel && (
-                  <p className="mt-2 text-[11px] text-white/40">
-                    Requer HTTPS e navegador Chrome/Edge (Android ou Windows).
-                    iOS Safari não suporta Web Bluetooth.
-                  </p>
-                )}
-              </div>
-            )}
-          </section>
-
-          {/* ---------- Frequência por período (Semanal/Mensal/Anual) ---------- */}
-          <section className={`${VIDRO} p-6`}>
-            <CardHeader icon={CalendarDays} titulo="Frequência">
-              <div className="flex rounded-full border border-white/10 bg-white/5 p-1 text-[11px] font-bold">
-                {(
-                  [
-                    ['semanal', 'Semanal'],
-                    ['mensal', 'Mensal'],
-                    ['anual', 'Anual']
-                  ] as const
-                ).map(([chave, rotulo]) => (
-                  <button
-                    key={chave}
-                    onClick={() => setPeriodoFrequencia(chave)}
-                    className={`rounded-full px-3 py-1 transition-all duration-300 ${
-                      periodoFrequencia === chave
-                        ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-md shadow-primary-900/40'
-                        : 'text-white/55 hover:text-white'
-                    }`}
-                  >
-                    {rotulo}
-                  </button>
-                ))}
-              </div>
-            </CardHeader>
-
-            {carregandoHistorico ? (
-              <div className="flex justify-center py-10 text-primary-400">
-                <Loader2 className="h-6 w-6 animate-spin" />
-              </div>
-            ) : (
-              <div>
-                <div className="mb-3 flex items-center justify-center gap-1.5 text-xs font-bold text-white/80">
-                  <span className="rounded-full bg-primary-500/15 px-2.5 py-1 text-primary-200 ring-1 ring-inset ring-primary-500/25">
-                    {periodoFrequencia === 'semanal' &&
-                      `${frequenciaPeriodo.semanal.total} treino(s) nesta semana`}
-                    {periodoFrequencia === 'mensal' &&
-                      `${frequenciaPeriodo.mensal.total} treino(s) neste mês`}
-                    {periodoFrequencia === 'anual' &&
-                      `${frequenciaPeriodo.anual.total} treino(s) neste ano`}
-                  </span>
-                </div>
-
-                {/* ---------- Semanal ---------- */}
-                {periodoFrequencia === 'semanal' && (
-                  <div className="flex h-44 items-end gap-1.5">
-                    {ORDEM.map((diaIdx) => {
-                      const esp = frequenciaPeriodo.semanal.esperadosPorDia[diaIdx]
-                      const real = frequenciaPeriodo.semanal.realizadosPorDia[diaIdx]
-                      const isHoje = diaIdx === new Date().getDay()
-                      return (
-                        <div
-                          key={diaIdx}
-                          className={`flex flex-1 flex-col items-center gap-1 ${
-                            isHoje
-                              ? 'rounded-2xl bg-primary-500/15 px-1 py-1.5 ring-1 ring-inset ring-primary-500/25'
-                              : ''
-                          }`}
-                        >
-                          <div className="flex h-full w-full items-end justify-center gap-1.5">
-                            <div className="flex w-3.5 flex-col items-center justify-end">
-                              <span className="mb-1 text-[10px] font-extrabold text-primary-300">
-                                {esp || ''}
-                              </span>
-                              <div
-                                className="w-full rounded-full bg-gradient-to-t from-primary-600 to-primary-300 transition-all duration-500"
-                                style={{
-                                  height: `${(esp / frequenciaPeriodo.semanal.maximo) * 100}%`,
-                                  minHeight: esp ? 4 : 0
-                                }}
-                                title={`Esperado (${ROTULOS[ORDEM.indexOf(diaIdx)]}): ${esp}`}
-                              />
-                            </div>
-                            <div className="flex w-3.5 flex-col items-center justify-end">
-                              <span className="mb-1 text-[10px] font-extrabold text-emerald-300">
-                                {real || ''}
-                              </span>
-                              <div
-                                className="w-full rounded-full bg-gradient-to-t from-emerald-600 to-emerald-400 transition-all duration-500"
-                                style={{
-                                  height: `${(real / frequenciaPeriodo.semanal.maximo) * 100}%`,
-                                  minHeight: real ? 4 : 0
-                                }}
-                                title={`Realizado (${ROTULOS[ORDEM.indexOf(diaIdx)]}): ${real}`}
-                              />
-                            </div>
-                          </div>
-                          <span
-                            className={`text-[10px] ${
-                              isHoje
-                                ? 'font-bold text-primary-300'
-                                : 'text-white/50'
-                            }`}
-                          >
-                            {ROTULOS[ORDEM.indexOf(diaIdx)]}
-                          </span>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-
-                {/* ---------- Mensal ---------- */}
-                {periodoFrequencia === 'mensal' && (
-                  <div className="flex h-44 items-end gap-2">
-                    {frequenciaPeriodo.mensal.realizadosPorSemana.map((v, i) => (
-                      <div
-                        key={i}
-                        className="flex flex-1 flex-col items-center gap-1"
-                      >
-                        <div className="flex w-full flex-1 items-end justify-center">
-                          <div className="flex w-10 flex-col items-center justify-end">
-                            <span className="mb-1 text-[10px] font-extrabold text-emerald-300">
-                              {v || ''}
-                            </span>
-                            <div
-                              className="w-full rounded-full bg-gradient-to-t from-emerald-600 to-emerald-400 transition-all duration-500"
-                              style={{
-                                height: `${(v / frequenciaPeriodo.mensal.maximo) * 100}%`,
-                                minHeight: v ? 4 : 0
-                              }}
-                              title={`Semana ${i + 1}: ${v} treino(s)`}
-                            />
-                          </div>
-                        </div>
-                        <span className="text-[10px] text-white/50">
-                          Sem {i + 1}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* ---------- Anual ---------- */}
-                {periodoFrequencia === 'anual' && (
-                  <div className="flex h-44 items-end gap-1">
-                    {frequenciaPeriodo.anual.realizadosPorMes.map((v, i) => (
-                      <div
-                        key={i}
-                        className="flex flex-1 flex-col items-center gap-1"
-                      >
-                        <div className="flex w-full flex-1 items-end justify-center">
-                          <div
-                            className="w-full max-w-4 rounded-full bg-gradient-to-t from-primary-600 to-primary-300 transition-all duration-500"
-                            style={{
-                              height: `${(v / frequenciaPeriodo.anual.maximo) * 100}%`,
-                              minHeight: v ? 3 : 0
-                            }}
-                            title={`${MESES_ROTULO[i]}: ${v} treino(s)`}
-                          />
-                        </div>
-                        <span className="text-[9px] text-white/50">
-                          {MESES_ROTULO[i]}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            <p className="mt-4 rounded-2xl border border-primary-500/25 bg-primary-500/10 px-3.5 py-2.5 text-center text-[11px] leading-snug text-primary-200">
-              Consistência é o segredo: cada treino concluído conta para a sua
-              evolução. Continue assim! 💪
-            </p>
-          </section>
-
-          {/* ---------- Evolução do PSE ---------- */}
-          <section className={`${VIDRO} p-6`}>
-            <CardHeader icon={TrendingUp} titulo="Evolução do PSE">
-              <div className="flex rounded-full border border-white/10 bg-white/5 p-1 text-[11px] font-bold">
-                {(
-                  [
-                    ['semanal', 'Sem'],
-                    ['mensal', 'Mês'],
-                    ['anual', 'Ano']
-                  ] as const
-                ).map(([chave, rotulo]) => (
-                  <button
-                    key={chave}
-                    onClick={() => setPeriodoPse(chave)}
-                    className={`rounded-full px-3 py-1 transition-all duration-300 ${
-                      periodoPse === chave
-                        ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-md shadow-primary-900/40'
-                        : 'text-white/55 hover:text-white'
-                    }`}
-                  >
-                    {rotulo}
-                  </button>
-                ))}
-              </div>
-            </CardHeader>
-            {pseSerie ? (
-              <div>
-                <div className="mb-4 grid grid-cols-3 gap-2 rounded-2xl border border-white/10 bg-white/[0.04] p-3 text-center shadow-inner ring-1 ring-inset ring-white/5">
-                  <div>
-                    <p className="text-xl font-extrabold text-white">
-                      {pseSerie.media.toFixed(1)}
-                    </p>
-                    <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-wide text-white/50">
-                      Média de esforço
-                    </p>
-                  </div>
-                  <div className="border-x border-white/10">
-                    <p className="text-xl font-extrabold text-primary-300">
-                      {pseSerie.ultimo}/10
-                    </p>
-                    <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-wide text-white/50">
-                      Último treino
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xl font-extrabold text-white">
-                      {pseSerie.pontos.length}
-                    </p>
-                    <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-wide text-white/50">
-                      Treinos no período
-                    </p>
-                  </div>
-                </div>
-
-                {/* Gráfico de linha SVG (últimos 14 do período) */}
-                <GraficoPse pontos={pseSerie.pontos.slice(-14)} />
-              </div>
-            ) : (
-              <div className="py-10 text-center text-white/60">
-                <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-white/5 ring-1 ring-inset ring-white/10">
-                  <TrendingUp className="h-7 w-7 text-primary-400" />
-                </div>
-                <p className="text-sm font-semibold text-white/80">
-                  Nenhum treino concluído no período
-                </p>
-                <p className="mt-1 text-xs text-white/50">
-                  Ao finalizar um treino com o cronômetro, sua nota de esforço
-                  (PSE) aparecerá aqui.
-                </p>
-              </div>
-            )}
           </section>
 
           {/* ---------- Ficha de Treino ---------- */}
@@ -1668,6 +1709,884 @@ export default function PortalAluno() {
             onFechar={() => setExecucaoAtiva(null)}
             onConcluido={marcarConcluido}
           />
+        )}
+
+        {/* ---------- Modal: Check-in ---------- */}
+        {modalAberto === 'checkin' && (
+          <ModalExpandido
+            titulo="Check-in do Dia"
+            icon={CalendarCheck}
+            onFechar={() => setModalAberto(null)}
+          >
+            <div className="text-center">
+              <p className="text-xs font-medium capitalize text-white/60">
+                {dataHoje}
+              </p>
+              {jaCheckinHoje || checkinSucesso ? (
+                <div className="py-2">
+                  <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border border-emerald-400/40 bg-emerald-500/15 shadow-lg shadow-emerald-500/20 ring-4 ring-emerald-500/10">
+                    <CheckCircle2 className="h-8 w-8 text-emerald-400" />
+                  </div>
+                  <p className="mt-3 font-bold text-white">
+                    Check-in realizado com sucesso!
+                  </p>
+                  <p className="mt-0.5 text-sm text-white/60">
+                    Você já treinou hoje. Nos vemos amanhã!
+                  </p>
+                  <button
+                    disabled
+                    className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 py-4 text-base font-extrabold text-white/35"
+                  >
+                    <CheckCircle2 className="h-5 w-5" />
+                    Check-in já realizado hoje
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={fazerCheckin}
+                  disabled={registrando || verificandoCheckin}
+                  className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-primary-500 to-primary-700 py-4 text-base font-extrabold text-white shadow-lg shadow-primary-500/30 ring-1 ring-inset ring-white/20 transition-all duration-300 hover:brightness-110 hover:shadow-primary-500/40 active:scale-[0.97] disabled:opacity-60"
+                >
+                  {registrando || verificandoCheckin ? (
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                  ) : (
+                    <CalendarCheck className="h-5 w-5" />
+                  )}
+                  {registrando
+                    ? 'Registrando...'
+                    : verificandoCheckin
+                      ? 'Verificando presença...'
+                      : 'Fazer Check-in Agora'}
+                </button>
+              )}
+            </div>
+          </ModalExpandido>
+        )}
+
+        {/* ---------- Modal: Frequência Cardíaca ---------- */}
+        {modalAberto === 'frequencimetro' && (
+          <ModalExpandido
+            titulo="Frequência Cardíaca"
+            icon={Activity}
+            onFechar={() => setModalAberto(null)}
+          >
+            {bpm != null ? (
+              <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-4 ring-1 ring-inset ring-white/5">
+                <div className="flex items-center gap-3.5">
+                  <span className="flex h-14 w-14 shrink-0 animate-pulse items-center justify-center rounded-full bg-rose-500/15 ring-1 ring-inset ring-rose-500/30">
+                    <Heart className="h-7 w-7 fill-rose-400 text-rose-400" />
+                  </span>
+                  <div>
+                    <p className="text-3xl font-extrabold tabular-nums leading-none text-white">
+                      {bpm}
+                    </p>
+                    <p className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-white/50">
+                      batimentos por minuto
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={desconectarFrequencimetro}
+                  className="rounded-full border border-white/15 bg-white/5 px-3.5 py-2 text-xs font-bold text-white/70 transition-all duration-300 hover:bg-white/10 hover:text-white active:scale-95"
+                >
+                  Desconectar
+                </button>
+              </div>
+            ) : (
+              <div className="text-center">
+                <div
+                  className={`mx-auto flex h-14 w-14 items-center justify-center rounded-full transition-colors ${
+                    bpmConectando
+                      ? 'bg-amber-500/15 ring-1 ring-inset ring-amber-500/30'
+                      : bpmConectado
+                        ? 'animate-pulse bg-emerald-500/15 ring-1 ring-inset ring-emerald-500/30'
+                        : 'bg-white/5 ring-1 ring-inset ring-white/10'
+                  }`}
+                >
+                  {bpmConectando ? (
+                    <Loader2 className="h-7 w-7 animate-spin text-amber-300" />
+                  ) : bpmConectado ? (
+                    <Heart className="h-6 w-6 fill-emerald-400 text-emerald-400" />
+                  ) : (
+                    <Bluetooth className="h-6 w-6 text-white/50" />
+                  )}
+                </div>
+
+                <p className="mt-3 text-sm font-bold text-white/90">
+                  {bpmConectando
+                    ? 'Conectando...'
+                    : bpmConectado
+                      ? 'Pareado · aguardando sinal'
+                      : 'Desconectado'}
+                </p>
+                <p className="mx-auto mt-1 max-w-xs text-xs leading-relaxed text-white/50">
+                  Use uma cinta cardíaca ou smartwatch compatível com Bluetooth
+                  Low Energy para acompanhar seus batimentos em tempo real
+                  durante o treino.
+                </p>
+
+                {bpmErro && !bpmConectado && (
+                  <p className="mt-2 text-[11px] font-medium text-red-300">
+                    {bpmErro}
+                  </p>
+                )}
+
+                {bpmConectado ? (
+                  <button
+                    onClick={desconectarFrequencimetro}
+                    className="mt-4 w-full rounded-2xl border border-white/15 bg-white/5 py-3.5 text-sm font-bold text-white/70 transition-all duration-300 hover:bg-white/10 hover:text-white active:scale-[0.97]"
+                  >
+                    Desconectar
+                  </button>
+                ) : (
+                  <button
+                    onClick={conectarFrequencimetro}
+                    disabled={bpmConectando || !bluetoothDisponivel}
+                    className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-rose-500 to-pink-600 py-3.5 text-sm font-extrabold text-white shadow-lg shadow-rose-500/30 ring-1 ring-inset ring-white/20 transition-all duration-300 hover:brightness-110 hover:shadow-rose-500/40 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {bpmConectando ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Bluetooth className="h-4 w-4" />
+                    )}
+                    {bpmConectando
+                      ? 'Conectando...'
+                      : bluetoothDisponivel
+                        ? 'Conectar Frequencímetro'
+                        : 'Bluetooth não suportado'}
+                  </button>
+                )}
+
+                {!bluetoothDisponivel && (
+                  <p className="mt-2 text-[11px] text-white/40">
+                    Requer HTTPS e navegador Chrome/Edge (Android ou Windows).
+                    iOS Safari não suporta Web Bluetooth.
+                  </p>
+                )}
+              </div>
+            )}
+          </ModalExpandido>
+        )}
+
+        {/* ---------- Modal: Frequência ---------- */}
+        {modalAberto === 'frequencia' && (
+          <ModalExpandido
+            titulo="Frequência"
+            icon={CalendarDays}
+            onFechar={() => setModalAberto(null)}
+          >
+            <div className="flex justify-center rounded-full border border-white/10 bg-white/5 p-1 text-[11px] font-bold">
+              {(
+                [
+                  ['semanal', 'Semanal'],
+                  ['mensal', 'Mensal'],
+                  ['anual', 'Anual']
+                ] as const
+              ).map(([chave, rotulo]) => (
+                <button
+                  key={chave}
+                  onClick={() => setPeriodoFrequencia(chave)}
+                  className={`rounded-full px-3 py-1 transition-all duration-300 ${
+                    periodoFrequencia === chave
+                      ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-md shadow-primary-900/40'
+                      : 'text-white/55 hover:text-white'
+                  }`}
+                >
+                  {rotulo}
+                </button>
+              ))}
+            </div>
+
+            {carregandoHistorico ? (
+              <div className="flex justify-center py-10 text-primary-400">
+                <Loader2 className="h-6 w-6 animate-spin" />
+              </div>
+            ) : (
+              <div>
+                <div className="mb-3 flex items-center justify-center gap-1.5 text-xs font-bold text-white/80">
+                  <span className="rounded-full bg-primary-500/15 px-2.5 py-1 text-primary-200 ring-1 ring-inset ring-primary-500/25">
+                    {periodoFrequencia === 'semanal' &&
+                      `${frequenciaPeriodo.semanal.total} treino(s) nesta semana`}
+                    {periodoFrequencia === 'mensal' &&
+                      `${frequenciaPeriodo.mensal.total} treino(s) neste mês`}
+                    {periodoFrequencia === 'anual' &&
+                      `${frequenciaPeriodo.anual.total} treino(s) neste ano`}
+                  </span>
+                </div>
+
+                {periodoFrequencia === 'semanal' && (
+                  <div className="flex h-44 items-end gap-1.5">
+                    {ORDEM.map((diaIdx) => {
+                      const esp = frequenciaPeriodo.semanal.esperadosPorDia[diaIdx]
+                      const real = frequenciaPeriodo.semanal.realizadosPorDia[diaIdx]
+                      const isHoje = diaIdx === new Date().getDay()
+                      return (
+                        <div
+                          key={diaIdx}
+                          className={`flex flex-1 flex-col items-center gap-1 ${
+                            isHoje
+                              ? 'rounded-2xl bg-primary-500/15 px-1 py-1.5 ring-1 ring-inset ring-primary-500/25'
+                              : ''
+                          }`}
+                        >
+                          <div className="flex h-full w-full items-end justify-center gap-1.5">
+                            <div className="flex w-3.5 flex-col items-center justify-end">
+                              <span className="mb-1 text-[10px] font-extrabold text-primary-300">
+                                {esp || ''}
+                              </span>
+                              <div
+                                className="w-full rounded-full bg-gradient-to-t from-primary-600 to-primary-300 transition-all duration-500"
+                                style={{
+                                  height: `${(esp / frequenciaPeriodo.semanal.maximo) * 100}%`,
+                                  minHeight: esp ? 4 : 0
+                                }}
+                                title={`Esperado (${ROTULOS[ORDEM.indexOf(diaIdx)]}): ${esp}`}
+                              />
+                            </div>
+                            <div className="flex w-3.5 flex-col items-center justify-end">
+                              <span className="mb-1 text-[10px] font-extrabold text-emerald-300">
+                                {real || ''}
+                              </span>
+                              <div
+                                className="w-full rounded-full bg-gradient-to-t from-emerald-600 to-emerald-400 transition-all duration-500"
+                                style={{
+                                  height: `${(real / frequenciaPeriodo.semanal.maximo) * 100}%`,
+                                  minHeight: real ? 4 : 0
+                                }}
+                                title={`Realizado (${ROTULOS[ORDEM.indexOf(diaIdx)]}): ${real}`}
+                              />
+                            </div>
+                          </div>
+                          <span
+                            className={`text-[10px] ${
+                              isHoje
+                                ? 'font-bold text-primary-300'
+                                : 'text-white/50'
+                            }`}
+                          >
+                            {ROTULOS[ORDEM.indexOf(diaIdx)]}
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+
+                {periodoFrequencia === 'mensal' && (
+                  <div className="flex h-44 items-end gap-2">
+                    {frequenciaPeriodo.mensal.realizadosPorSemana.map((v, i) => (
+                      <div
+                        key={i}
+                        className="flex flex-1 flex-col items-center gap-1"
+                      >
+                        <div className="flex w-full flex-1 items-end justify-center">
+                          <div className="flex w-10 flex-col items-center justify-end">
+                            <span className="mb-1 text-[10px] font-extrabold text-emerald-300">
+                              {v || ''}
+                            </span>
+                            <div
+                              className="w-full rounded-full bg-gradient-to-t from-emerald-600 to-emerald-400 transition-all duration-500"
+                              style={{
+                                height: `${(v / frequenciaPeriodo.mensal.maximo) * 100}%`,
+                                minHeight: v ? 4 : 0
+                              }}
+                              title={`Semana ${i + 1}: ${v} treino(s)`}
+                            />
+                          </div>
+                        </div>
+                        <span className="text-[10px] text-white/50">
+                          Sem {i + 1}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {periodoFrequencia === 'anual' && (
+                  <div className="flex h-44 items-end gap-1">
+                    {frequenciaPeriodo.anual.realizadosPorMes.map((v, i) => (
+                      <div
+                        key={i}
+                        className="flex flex-1 flex-col items-center gap-1"
+                      >
+                        <div className="flex w-full flex-1 items-end justify-center">
+                          <div
+                            className="w-full max-w-4 rounded-full bg-gradient-to-t from-primary-600 to-primary-300 transition-all duration-500"
+                            style={{
+                              height: `${(v / frequenciaPeriodo.anual.maximo) * 100}%`,
+                              minHeight: v ? 3 : 0
+                            }}
+                            title={`${MESES_ROTULO[i]}: ${v} treino(s)`}
+                          />
+                        </div>
+                        <span className="text-[9px] text-white/50">
+                          {MESES_ROTULO[i]}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <p className="rounded-2xl border border-primary-500/25 bg-primary-500/10 px-3.5 py-2.5 text-center text-[11px] leading-snug text-primary-200">
+              Consistência é o segredo: cada treino concluído conta para a sua
+              evolução. Continue assim!
+            </p>
+          </ModalExpandido>
+        )}
+
+        {/* ---------- Modal: Evolução do PSE ---------- */}
+        {modalAberto === 'pse' && (
+          <ModalExpandido
+            titulo="Evolução do PSE"
+            icon={TrendingUp}
+            onFechar={() => setModalAberto(null)}
+          >
+            <div className="flex justify-center rounded-full border border-white/10 bg-white/5 p-1 text-[11px] font-bold">
+              {(
+                [
+                  ['semanal', 'Sem'],
+                  ['mensal', 'Mês'],
+                  ['anual', 'Ano']
+                ] as const
+              ).map(([chave, rotulo]) => (
+                <button
+                  key={chave}
+                  onClick={() => setPeriodoPse(chave)}
+                  className={`rounded-full px-3 py-1 transition-all duration-300 ${
+                    periodoPse === chave
+                      ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-md shadow-primary-900/40'
+                      : 'text-white/55 hover:text-white'
+                  }`}
+                >
+                  {rotulo}
+                </button>
+              ))}
+            </div>
+            {pseSerie ? (
+              <div>
+                <div className="mb-4 grid grid-cols-3 gap-2 rounded-2xl border border-white/10 bg-white/[0.04] p-3 text-center shadow-inner ring-1 ring-inset ring-white/5">
+                  <div>
+                    <p className="text-xl font-extrabold text-white">
+                      {pseSerie.media.toFixed(1)}
+                    </p>
+                    <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-wide text-white/50">
+                      Média de esforço
+                    </p>
+                  </div>
+                  <div className="border-x border-white/10">
+                    <p className="text-xl font-extrabold text-primary-300">
+                      {pseSerie.ultimo}/10
+                    </p>
+                    <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-wide text-white/50">
+                      Último treino
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xl font-extrabold text-white">
+                      {pseSerie.pontos.length}
+                    </p>
+                    <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-wide text-white/50">
+                      Treinos no período
+                    </p>
+                  </div>
+                </div>
+
+                <GraficoPse pontos={pseSerie.pontos.slice(-14)} />
+              </div>
+            ) : (
+              <div className="py-10 text-center text-white/60">
+                <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-white/5 ring-1 ring-inset ring-white/10">
+                  <TrendingUp className="h-7 w-7 text-primary-400" />
+                </div>
+                <p className="text-sm font-semibold text-white/80">
+                  Nenhum treino concluído no período
+                </p>
+                <p className="mt-1 text-xs text-white/50">
+                  Ao finalizar um treino com o cronômetro, sua nota de esforço
+                  (PSE) aparecerá aqui.
+                </p>
+              </div>
+            )}
+          </ModalExpandido>
+        )}
+
+        {/* ---------- Modal: Pagamentos ---------- */}
+        {modalAberto === 'pagamento' && (
+          <ModalExpandido
+            titulo="Pagamentos"
+            icon={Wallet}
+            onFechar={() => setModalAberto(null)}
+          >
+            <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 ring-1 ring-inset ring-white/5">
+              <div className="flex items-center gap-3">
+                <span
+                  className={`flex h-11 w-11 items-center justify-center rounded-xl ring-1 ring-inset ${
+                    CORES_STATUS_PAG[statusPagamentoAtual.rotulo.toLowerCase()]
+                  }`}
+                >
+                  {statusPagamentoAtual.rotulo === 'Pago' ? (
+                    <CheckCircle2 className="h-5 w-5" />
+                  ) : (
+                    <Wallet className="h-5 w-5" />
+                  )}
+                </span>
+                <div>
+                  <p className="text-sm font-bold text-white">
+                    {competenciaAtual}
+                  </p>
+                  <p className="text-xs text-white/50">
+                    {formatarMoeda(aluno.plano_valor)} ·{' '}
+                    {statusPagamentoAtual.rotulo}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {!formaPagamentoAtiva && (
+              <div className="grid grid-cols-2 gap-2.5">
+                <button
+                  onClick={() => setFormaPagamentoAtiva('pix')}
+                  className="flex flex-col items-center gap-2 rounded-2xl border border-white/15 bg-white/5 py-4 text-sm font-bold text-white/80 transition-all duration-300 hover:bg-white/10 active:scale-[0.97]"
+                >
+                  <QrCode className="h-6 w-6 text-primary-400" />
+                  Pagar com Pix
+                </button>
+                <button
+                  onClick={() => setFormaPagamentoAtiva('cartao')}
+                  className="flex flex-col items-center gap-2 rounded-2xl border border-white/15 bg-white/5 py-4 text-sm font-bold text-white/80 transition-all duration-300 hover:bg-white/10 active:scale-[0.97]"
+                >
+                  <CreditCard className="h-6 w-6 text-primary-400" />
+                  Pagar com Cartão
+                </button>
+              </div>
+            )}
+
+            {formaPagamentoAtiva === 'pix' && (
+              <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 ring-1 ring-inset ring-white/5">
+                <div className="mb-3 flex items-center justify-between">
+                  <p className="text-sm font-bold text-white">Pix copia e cola</p>
+                  <span className="rounded-full bg-primary-500/15 px-2.5 py-1 text-[10px] font-bold text-primary-200 ring-1 ring-inset ring-primary-500/25">
+                    {formatarMoeda(aluno.plano_valor)}
+                  </span>
+                </div>
+                <div className="rounded-xl border border-dashed border-white/20 bg-black/20 p-3">
+                  <p className="break-all font-mono text-[10px] leading-relaxed text-white/70">
+                    {pixCopiaECola}
+                  </p>
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <button
+                    onClick={copiarPix}
+                    disabled={cartaoProcessing}
+                    className="flex items-center justify-center gap-1.5 rounded-xl border border-white/15 bg-white/5 py-2.5 text-xs font-bold text-white/80 transition-all duration-300 hover:bg-white/10 active:scale-[0.97] disabled:opacity-60"
+                  >
+                    {pixCopiado ? (
+                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+                    ) : (
+                      <Copy className="h-3.5 w-3.5" />
+                    )}
+                    {pixCopiado ? 'Copiado!' : 'Copiar código'}
+                  </button>
+                  <button
+                    onClick={confirmarPix}
+                    disabled={cartaoProcessing}
+                    className="flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 py-2.5 text-xs font-extrabold text-white shadow-lg shadow-emerald-500/30 ring-1 ring-inset ring-white/20 transition-all duration-300 hover:brightness-110 active:scale-[0.97] disabled:opacity-60"
+                  >
+                    {cartaoProcessing ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                    )}
+                    {cartaoProcessing ? 'Confirmando...' : 'Já paguei, confirmar'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {formaPagamentoAtiva === 'cartao' && (
+              <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 ring-1 ring-inset ring-white/5">
+                <p className="mb-3 text-sm font-bold text-white">
+                  Cartão de crédito
+                </p>
+                <input
+                  value={cartaoNumero}
+                  onChange={(e) => setCartaoNumero(e.target.value)}
+                  placeholder="Número do cartão"
+                  inputMode="numeric"
+                  className="w-full rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-primary-400"
+                />
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  <input
+                    value={cartaoValidade}
+                    onChange={(e) => setCartaoValidade(e.target.value)}
+                    placeholder="Validade (MM/AA)"
+                    className="w-full rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-primary-400"
+                  />
+                  <input
+                    value={cartaoCvv}
+                    onChange={(e) => setCartaoCvv(e.target.value)}
+                    placeholder="CVV"
+                    inputMode="numeric"
+                    className="w-full rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-primary-400"
+                  />
+                </div>
+                <div className="mt-2">
+                  <label className="mb-1 block text-[10px] font-bold uppercase tracking-wide text-white/50">
+                    Parcelas
+                  </label>
+                  <select
+                    value={cartaoParcelas}
+                    onChange={(e) => setCartaoParcelas(Number(e.target.value))}
+                    className="w-full rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 text-sm text-white outline-none"
+                  >
+                    {Array.from({ length: 12 }).map((_, i) => (
+                      <option key={i} value={i + 1} className="bg-zinc-900">
+                        {i + 1}x{' '}
+                        {i === 0
+                          ? 'à vista'
+                          : `de ${formatarMoeda(
+                              (Number(aluno.plano_valor) || 0) / (i + 1)
+                            )}`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="mt-3 flex gap-2">
+                  <button
+                    onClick={() => setFormaPagamentoAtiva(null)}
+                    disabled={cartaoProcessing}
+                    className="flex-1 rounded-xl border border-white/15 bg-white/5 py-2.5 text-xs font-bold text-white/70 transition-all duration-300 hover:bg-white/10 active:scale-[0.97] disabled:opacity-60"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={pagarCartao}
+                    disabled={cartaoProcessing}
+                    className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-primary-500 to-primary-600 py-2.5 text-xs font-extrabold text-white shadow-lg shadow-primary-500/30 ring-1 ring-inset ring-white/20 transition-all duration-300 hover:brightness-110 active:scale-[0.97] disabled:opacity-60"
+                  >
+                    {cartaoProcessing ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <CreditCard className="h-3.5 w-3.5" />
+                    )}
+                    {cartaoProcessing
+                      ? 'Processando...'
+                      : `Pagar ${formatarMoeda(aluno.plano_valor)}`}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div>
+              <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-white/50">
+                Pagamentos anteriores
+              </p>
+              {pagamentos.length === 0 ? (
+                <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-5 text-center text-xs text-white/50">
+                  Nenhum pagamento registrado ainda.
+                </div>
+              ) : (
+                <ul className="space-y-2">
+                  {pagamentos.map((p) => (
+                    <li
+                      key={p.id}
+                      className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3"
+                    >
+                      <div>
+                        <p className="text-sm font-bold text-white">
+                          {FORMATAR_COMPETENCIA(p.competencia)}
+                        </p>
+                        <p className="text-[11px] text-white/50">
+                          {formatarData(p.data_pagamento) || '—'} ·{' '}
+                          {p.forma === 'pix'
+                            ? 'Pix'
+                            : p.forma === 'cartao'
+                              ? 'Cartão'
+                              : '—'}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-extrabold text-white">
+                          {formatarMoeda(p.valor)}
+                        </span>
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[10px] font-bold ring-1 ring-inset ${
+                            CORES_STATUS_PAG[p.status] || CORES_STATUS_PAG.aberto
+                          }`}
+                        >
+                          {p.status === 'pago'
+                            ? 'Pago'
+                            : p.status === 'atrasado'
+                              ? 'Atrasado'
+                              : 'Aberto'}
+                        </span>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </ModalExpandido>
+        )}
+
+        {/* ---------- Modal: Perfil ---------- */}
+        {modalAberto === 'perfil' && (
+          <ModalExpandido
+            titulo="Meu Perfil"
+            icon={User}
+            onFechar={() => setModalAberto(null)}
+          >
+            <div className="flex items-center gap-3">
+              <span className="flex h-14 w-14 items-center justify-center rounded-full bg-white/10 text-lg font-extrabold ring-1 ring-white/20">
+                {iniciais(aluno.nome)}
+              </span>
+              <div>
+                <p className="text-base font-extrabold text-white">{aluno.nome}</p>
+                <p className="text-xs text-white/50">Atualize seus dados abaixo</p>
+              </div>
+            </div>
+
+            {perfilEditando ? (
+              <div className="space-y-3">
+                <div>
+                  <label className="mb-1 block text-[10px] font-bold uppercase tracking-wide text-white/50">
+                    Nome
+                  </label>
+                  <input
+                    value={perfilDados.nome}
+                    onChange={(e) =>
+                      setPerfilDados({ ...perfilDados, nome: e.target.value })
+                    }
+                    className="w-full rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-primary-400"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-[10px] font-bold uppercase tracking-wide text-white/50">
+                    Telefone
+                  </label>
+                  <input
+                    value={perfilDados.telefone}
+                    onChange={(e) =>
+                      setPerfilDados({
+                        ...perfilDados,
+                        telefone: e.target.value
+                      })
+                    }
+                    inputMode="tel"
+                    placeholder="Ex.: (11) 99999-9999"
+                    className="w-full rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-primary-400"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-[10px] font-bold uppercase tracking-wide text-white/50">
+                    CPF
+                  </label>
+                  <input
+                    value={perfilDados.cpf}
+                    onChange={(e) =>
+                      setPerfilDados({ ...perfilDados, cpf: e.target.value })
+                    }
+                    inputMode="numeric"
+                    placeholder="Ex.: 123.456.789-00"
+                    className="w-full rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-primary-400"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      setPerfilEditando(false)
+                      setPerfilDados({
+                        nome: aluno.nome || '',
+                        telefone: aluno.telefone || '',
+                        cpf: aluno.cpf || ''
+                      })
+                    }}
+                    className="flex-1 rounded-xl border border-white/15 bg-white/5 py-2.5 text-xs font-bold text-white/70 transition-all duration-300 hover:bg-white/10 active:scale-[0.97]"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={salvarPerfil}
+                    disabled={salvandoPerfil}
+                    className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-primary-500 to-primary-600 py-2.5 text-xs font-extrabold text-white shadow-lg shadow-primary-500/30 ring-1 ring-inset ring-white/20 transition-all duration-300 hover:brightness-110 active:scale-[0.97] disabled:opacity-60"
+                  >
+                    {salvandoPerfil ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Save className="h-3.5 w-3.5" />
+                    )}
+                    {salvandoPerfil ? 'Salvando...' : 'Salvar'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-2.5">
+                {[
+                  ['Nome', aluno.nome],
+                  ['Telefone', aluno.telefone || '—'],
+                  ['CPF', aluno.cpf || '—']
+                ].map(([rotulo, valor]) => (
+                  <div
+                    key={rotulo}
+                    className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3"
+                  >
+                    <span className="text-xs font-bold uppercase tracking-wide text-white/50">
+                      {rotulo}
+                    </span>
+                    <span className="text-sm font-semibold text-white">
+                      {valor}
+                    </span>
+                  </div>
+                ))}
+                <button
+                  onClick={() => setPerfilEditando(true)}
+                  className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-white/15 bg-white/5 py-3 text-xs font-bold text-white/80 transition-all duration-300 hover:bg-white/10 active:scale-[0.97]"
+                >
+                  <Save className="h-3.5 w-3.5" />
+                  Editar perfil
+                </button>
+              </div>
+            )}
+          </ModalExpandido>
+        )}
+
+        {/* ---------- Modal: Matrícula ---------- */}
+        {modalAberto === 'matricula' && (
+          <ModalExpandido
+            titulo="Minha Matrícula"
+            icon={ClipboardList}
+            onFechar={() => setModalAberto(null)}
+          >
+            <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 ring-1 ring-inset ring-white/5">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-white/50">
+                Plano contratado
+              </p>
+              <p className="mt-1 text-3xl font-extrabold text-white">
+                {formatarMoeda(aluno.plano_valor)}
+              </p>
+              <span
+                className={`mt-2 inline-block rounded-full px-2.5 py-1 text-[10px] font-bold ring-1 ring-inset ${
+                  CORES_STATUS_PAG[
+                    aluno.status_pagamento === 'em_dia'
+                      ? 'pago'
+                      : aluno.status_pagamento === 'vencendo'
+                        ? 'aberto'
+                        : 'atrasado'
+                  ]
+                }`}
+              >
+                {ROTULO_STATUS_ALUNO[aluno.status_pagamento || ''] || '—'}
+              </span>
+            </div>
+
+            <div className="space-y-2.5">
+              {[
+                ['Forma de pagamento', aluno.forma_pagamento || 'Não definida'],
+                ['Vencimento', formatarData(aluno.data_vencimento)],
+                [
+                  'Matrícula desde',
+                  formatarData(aluno.created_at)
+                ]
+              ].map(([rotulo, valor]) => (
+                <div
+                  key={rotulo}
+                  className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3"
+                >
+                  <span className="text-xs font-bold uppercase tracking-wide text-white/50">
+                    {rotulo}
+                  </span>
+                  <span className="text-sm font-semibold text-white">
+                    {valor}
+                  </span>
+                </div>
+              ))}
+              {aluno.data_vencimento &&
+                (() => {
+                  const dias = Math.floor(
+                    (new Date(aluno.data_vencimento + 'T00:00:00').getTime() -
+                      Date.now()) /
+                      86400000
+                  )
+                  return (
+                    <div
+                      className={`flex items-center justify-between rounded-2xl border px-4 py-3 ${
+                        dias < 0
+                          ? 'border-red-500/30 bg-red-500/10'
+                          : 'border-white/10 bg-white/[0.04]'
+                      }`}
+                    >
+                      <span className="text-xs font-bold uppercase tracking-wide text-white/50">
+                        Renovação
+                      </span>
+                      <span className="text-sm font-semibold text-white">
+                        {dias < 0
+                          ? `Vencida há ${Math.abs(dias)} dia(s)`
+                          : `Em ${dias} dia(s)`}
+                      </span>
+                    </div>
+                  )
+                })()}
+            </div>
+          </ModalExpandido>
+        )}
+
+        {/* ---------- Modal: Avaliação Física ---------- */}
+        {modalAberto === 'avaliacao' && (
+          <ModalExpandido
+            titulo="Avaliação Física"
+            icon={Stethoscope}
+            onFechar={() => setModalAberto(null)}
+          >
+            {avaliacao ? (
+              <>
+                <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3">
+                  <span className="text-xs font-bold uppercase tracking-wide text-white/50">
+                    Data da avaliação
+                  </span>
+                  <span className="text-sm font-semibold text-white">
+                    {formatarData(avaliacao.data)}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {Object.entries(avaliacao.medidas_json || {}).map(
+                    ([k, v]) => (
+                      <div
+                        key={k}
+                        className="rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-3 text-center"
+                      >
+                        <p className="text-sm font-extrabold text-white">
+                          {String(v)}
+                        </p>
+                        <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-wide text-white/50">
+                          {k}
+                        </p>
+                      </div>
+                    )
+                  )}
+                </div>
+                {avaliacao.observacoes && (
+                  <p className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-xs leading-relaxed text-white/60">
+                    {avaliacao.observacoes}
+                  </p>
+                )}
+              </>
+            ) : (
+              <div className="py-10 text-center">
+                <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-white/5 ring-1 ring-inset ring-white/10">
+                  <Stethoscope className="h-7 w-7 text-primary-400" />
+                </div>
+                <p className="text-sm font-semibold text-white/80">
+                  Ainda não há avaliação física
+                </p>
+                <p className="mx-auto mt-1 max-w-xs text-xs text-white/50">
+                  {config.nome_academia} registra aqui suas medidas e evolução.
+                  Fale com a recepção para agendar a sua avaliação.
+                </p>
+              </div>
+            )}
+          </ModalExpandido>
         )}
 
         {/* ---------- Modal de Feedback (Concluir Treino) ---------- */}
