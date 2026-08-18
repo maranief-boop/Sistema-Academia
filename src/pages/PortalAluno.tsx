@@ -41,6 +41,7 @@ import {
   X
 } from 'lucide-react'
 import fundoAcademia from '../assets/fundo.png'
+import { GraficoLinhaBpm } from '../components/Graficos'
 import { formatarMoeda, formatarData, dataParaInput } from '../utils/format'
 
 type Aluno = {
@@ -406,11 +407,18 @@ export default function PortalAluno() {
   const [observacoes, setObservacoes] = useState('')
   const [salvandoFeedback, setSalvandoFeedback] = useState(false)
 
+  // Espelha o estado do cronômetro em um ref (para o callback Bluetooth)
+  const cronometroAtivoRef = useRef(cronometroAtivo)
+  useEffect(() => {
+    cronometroAtivoRef.current = cronometroAtivo
+  }, [cronometroAtivo])
+
   // ---------- Histórico de treinos (PSE + frequência por período) ----------
   const [historicoTreinos, setHistoricoTreinos] = useState<any[]>([])
   const [carregandoHistorico, setCarregandoHistorico] = useState(false)
   const [periodoFrequencia, setPeriodoFrequencia] = useState<'semanal' | 'mensal' | 'anual'>('semanal')
   const [periodoPse, setPeriodoPse] = useState<'semanal' | 'mensal' | 'anual'>('semanal')
+  const [periodoBpm, setPeriodoBpm] = useState<'semanal' | 'mensal' | 'anual'>('semanal')
 
   // ---------- Frequencímetro (Web Bluetooth / BPM em tempo real) ----------
   const [bpm, setBpm] = useState<number | null>(null)
@@ -419,6 +427,8 @@ export default function PortalAluno() {
   const [bpmErro, setBpmErro] = useState('')
   const bpmDeviceRef = useRef<any>(null)
   const bpmCharRef = useRef<any>(null)
+  // Amostras de BPM coletadas enquanto o cronômetro está ativo
+  const bpmAmostras = useRef<number[]>([])
 
   // ---------- Estado do layout SCA Aluno ----------
   const [modalAberto, setModalAberto] = useState<string | null>(null)
@@ -535,6 +545,7 @@ export default function PortalAluno() {
     }
     bpmDeviceRef.current = null
     bpmCharRef.current = null
+    bpmAmostras.current = []
     setBpm(null)
     setBpmConectado(false)
     toast('Sessão encerrada. Até logo!')
@@ -956,6 +967,36 @@ export default function PortalAluno() {
     return { pontos, media, ultimo }
   }, [historicoTreinos, periodoPse])
 
+  // ----- Evolução da FC média (BPM) por período (Semanal / Mensal / Anual) -----
+  const bpmSerie = useMemo(() => {
+    const agora = new Date()
+    const inicio = (() => {
+      if (periodoBpm === 'semanal') {
+        const d = new Date()
+        d.setHours(0, 0, 0, 0)
+        const dia = (d.getDay() + 6) % 7 // segunda = 0
+        d.setDate(d.getDate() - dia)
+        return d
+      }
+      if (periodoBpm === 'mensal') return new Date(agora.getFullYear(), agora.getMonth(), 1)
+      return new Date(agora.getFullYear(), 0, 1)
+    })()
+
+    const pontos = historicoTreinos.filter(
+      (h) => h.bpm_medio != null && new Date(h.data) >= inicio
+    )
+    if (pontos.length === 0) return null
+    const media = Math.round(
+      pontos.reduce((s, h) => s + Number(h.bpm_medio), 0) / pontos.length
+    )
+    const ultimo = Number(pontos[pontos.length - 1].bpm_medio)
+    return {
+      pontos: pontos.map((p) => ({ data: p.data, bpm: Number(p.bpm_medio) })),
+      media,
+      ultimo
+    }
+  }, [historicoTreinos, periodoBpm])
+
   // Insere o check-in com data/hora atual (com bloqueio de repetição no dia)
   const fazerCheckin = async () => {
     if (!aluno) return
@@ -1011,9 +1052,25 @@ export default function PortalAluno() {
     if (!aluno) return
     setSalvandoFeedback(true)
     try {
+      // Média/min/max das amostras de BPM coletadas durante o treino
+      const amostras = bpmAmostras.current.filter(
+        (n) => Number.isFinite(n) && n > 0
+      )
+      const bpmDados =
+        amostras.length > 0
+          ? {
+              bpm_medio: Math.round(
+                amostras.reduce((s, n) => s + n, 0) / amostras.length
+              ),
+              bpm_min: Math.min(...amostras),
+              bpm_max: Math.max(...amostras),
+              bpm_amostras: amostras.length
+            }
+          : {}
       const { error } = await supabase
         .from('historico_treinos')
         .insert({
+          ...bpmDados,
           aluno_id: aluno.id,
           data: new Date().toISOString(),
           tempo_segundos: tempoDecorrido,
@@ -1021,7 +1078,12 @@ export default function PortalAluno() {
           observacoes: observacoes.trim() || null
         })
       if (error) throw error
-      toast('Treino concluído com sucesso! 💪')
+      toast(
+        amostras.length > 0
+          ? `Treino concluído! 💪 FC média ${bpmDados.bpm_medio} bpm.`
+          : 'Treino concluído com sucesso! 💪'
+      )
+      bpmAmostras.current = []
       setCronometroAtivo(false)
       setTempoDecorrido(0)
       setModalFeedback(false)
@@ -1036,7 +1098,11 @@ export default function PortalAluno() {
   // Alterna o cronômetro (iniciar/pausar)
   const alternarCronometro = () => {
     if (!aluno) return
-    setCronometroAtivo((a) => !a)
+    setCronometroAtivo((a) => {
+      // Iniciar um treino novo (cronômetro zerado) zera as amostras de BPM
+      if (!a && tempoDecorrido === 0) bpmAmostras.current = []
+      return !a
+    })
   }
 
   // ===================================================================
@@ -1045,7 +1111,12 @@ export default function PortalAluno() {
   const aoLerBpm = (e: any) => {
     const valor: DataView | undefined = e.target?.value
     if (!valor) return
-    setBpm(extrairBpm(valor))
+    const b = extrairBpm(valor)
+    setBpm(b)
+    // Acumula amostras apenas durante o treino (cronômetro ativo)
+    if (cronometroAtivoRef.current && Number.isFinite(b) && b > 0) {
+      bpmAmostras.current.push(b)
+    }
   }
 
   const conectarFrequencimetro = async () => {
@@ -1865,6 +1936,86 @@ export default function PortalAluno() {
                 )}
               </div>
             )}
+
+            {/* ---------- Evolução da FC média (por período) ---------- */}
+            <div className="mt-5 rounded-2xl border border-white/10 bg-white/[0.04] p-4 ring-1 ring-inset ring-white/5">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <HeartPulse className="h-4 w-4 text-rose-400" />
+                  <p className="text-xs font-bold uppercase tracking-wide text-white/70">
+                    Evolução da FC média
+                  </p>
+                </div>
+                <div className="flex rounded-full border border-white/10 bg-white/5 p-1 text-[11px] font-bold">
+                  {(
+                    [
+                      ['semanal', 'Sem'],
+                      ['mensal', 'Mês'],
+                      ['anual', 'Ano']
+                    ] as const
+                  ).map(([chave, rotulo]) => (
+                    <button
+                      key={chave}
+                      onClick={() => setPeriodoBpm(chave)}
+                      className={`rounded-full px-3 py-1 transition-all duration-300 ${
+                        periodoBpm === chave
+                          ? 'bg-gradient-to-r from-rose-500 to-pink-600 text-white shadow-md shadow-rose-900/40'
+                          : 'text-white/55 hover:text-white'
+                      }`}
+                    >
+                      {rotulo}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {bpmSerie ? (
+                <div>
+                  <div className="mb-3 grid grid-cols-3 gap-2 rounded-2xl border border-white/10 bg-white/[0.04] p-3 text-center shadow-inner ring-1 ring-inset ring-white/5">
+                    <div>
+                      <p className="text-xl font-extrabold tabular-nums text-white">
+                        {bpmSerie.media}
+                      </p>
+                      <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-wide text-white/50">
+                        Média bpm
+                      </p>
+                    </div>
+                    <div className="border-x border-white/10">
+                      <p className="text-xl font-extrabold tabular-nums text-rose-300">
+                        {bpmSerie.ultimo}
+                      </p>
+                      <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-wide text-white/50">
+                        Último treino
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xl font-extrabold tabular-nums text-white">
+                        {bpmSerie.pontos.length}
+                      </p>
+                      <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-wide text-white/50">
+                        Treinos c/ medição
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-white">
+                    <GraficoLinhaBpm pontos={bpmSerie.pontos} />
+                  </div>
+                </div>
+              ) : (
+                <div className="py-8 text-center">
+                  <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-white/5 ring-1 ring-inset ring-white/10">
+                    <HeartPulse className="h-6 w-6 text-rose-400" />
+                  </div>
+                  <p className="text-sm font-semibold text-white/80">
+                    Nenhuma medição no período
+                  </p>
+                  <p className="mx-auto mt-1 max-w-xs text-xs text-white/50">
+                    Ao treinar com o frequencímetro conectado e o cronômetro
+                    ativo, a FC média do treino aparecerá aqui.
+                  </p>
+                </div>
+              )}
+            </div>
           </ModalExpandido>
         )}
 
@@ -2628,6 +2779,33 @@ export default function PortalAluno() {
                     {formatarTempo(tempoDecorrido)}
                   </span>
                 </div>
+
+                {/* Resumo de FC da sessão (se houver amostras) */}
+                {(() => {
+                  const amostras = bpmAmostras.current.filter(
+                    (n) => Number.isFinite(n) && n > 0
+                  )
+                  if (amostras.length === 0) return null
+                  const media = Math.round(
+                    amostras.reduce((s, n) => s + n, 0) / amostras.length
+                  )
+                  const minimo = Math.min(...amostras)
+                  const maximo = Math.max(...amostras)
+                  return (
+                    <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 ring-1 ring-inset ring-white/5">
+                      <span className="flex items-center gap-2 text-sm font-semibold text-white/80">
+                        <HeartPulse className="h-4 w-4 text-rose-400" />
+                        Frequência cardíaca
+                      </span>
+                      <span className="text-lg font-extrabold tabular-nums text-rose-300">
+                        {media} bpm
+                        <span className="ml-1 text-xs font-semibold text-white/50">
+                          ({minimo}–{maximo})
+                        </span>
+                      </span>
+                    </div>
+                  )
+                })()}
 
                 {/* PSE (0-10) */}
                 <div>

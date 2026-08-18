@@ -152,6 +152,10 @@ create table if not exists public.historico_treinos (
   tempo_segundos integer,
   pse            integer check (pse between 0 and 10),
   observacoes    text,
+  bpm_medio      integer,   -- FC média do treino (cronômetro ativo)
+  bpm_min        integer,   -- FC mínima registrada
+  bpm_max        integer,   -- FC máxima registrada
+  bpm_amostras   integer,   -- nº de leituras usadas no cálculo
   created_at     timestamptz not null default now()
 );
 
@@ -162,6 +166,10 @@ alter table public.historico_treinos add column if not exists data timestamptz;
 alter table public.historico_treinos add column if not exists tempo_segundos integer;
 alter table public.historico_treinos add column if not exists pse integer;
 alter table public.historico_treinos add column if not exists observacoes text;
+alter table public.historico_treinos add column if not exists bpm_medio integer;
+alter table public.historico_treinos add column if not exists bpm_min integer;
+alter table public.historico_treinos add column if not exists bpm_max integer;
+alter table public.historico_treinos add column if not exists bpm_amostras integer;
 alter table public.historico_treinos add column if not exists created_at timestamptz not null default now();
 
 create index if not exists historico_treinos_aluno_idx on public.historico_treinos (aluno_id, data desc);

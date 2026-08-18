@@ -14,13 +14,14 @@ import {
   MessageSquare,
   TrendingUp,
   BarChart3,
-  History
+  History,
+  HeartPulse
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { Modal } from './Modal'
 import { Card, EstadoVazio, Spinner } from './ui'
 import { StatusBadge } from './StatusBadge'
-import { GraficoBarras, GraficoLinhaPse, SeletorPeriodo } from './Graficos'
+import { GraficoBarras, GraficoLinhaPse, GraficoLinhaBpm, SeletorPeriodo } from './Graficos'
 import {
   ORDEM_DIAS,
   ROTULOS_DIAS,
@@ -60,6 +61,7 @@ export default function ModalHistorico({ aluno, onFechar }) {
   const [historicos, setHistoricos] = useState([])
   const [carregando, setCarregando] = useState(false)
   const [periodo, setPeriodo] = useState('semanal')
+  const [periodoBpm, setPeriodoBpm] = useState('semanal')
 
   // Busca os dados do aluno ao abrir o modal
   useEffect(() => {
@@ -145,6 +147,36 @@ export default function ModalHistorico({ aluno, onFechar }) {
     if (comPse.length === 0) return null
     return comPse.reduce((s, h) => s + Number(h.pse), 0) / comPse.length
   }, [historicos])
+
+  // ----- Evolução da FC média (BPM) por período -----
+  const bpmSerie = useMemo(() => {
+    const agora = new Date()
+    const inicio = (() => {
+      if (periodoBpm === 'semanal') {
+        const d = new Date()
+        d.setHours(0, 0, 0, 0)
+        const dia = (d.getDay() + 6) % 7 // segunda = 0
+        d.setDate(d.getDate() - dia)
+        return d
+      }
+      if (periodoBpm === 'mensal') return new Date(agora.getFullYear(), agora.getMonth(), 1)
+      return new Date(agora.getFullYear(), 0, 1)
+    })()
+
+    const pontos = historicos.filter(
+      (h) => h.bpm_medio != null && new Date(h.data) >= inicio
+    )
+    if (pontos.length === 0) return null
+    const media = Math.round(
+      pontos.reduce((s, h) => s + Number(h.bpm_medio), 0) / pontos.length
+    )
+    const ultimo = Number(pontos[pontos.length - 1].bpm_medio)
+    return {
+      pontos: pontos.map((p) => ({ data: p.data, bpm: Number(p.bpm_medio) })),
+      media,
+      ultimo
+    }
+  }, [historicos, periodoBpm])
 
   return (
     <Modal
@@ -280,6 +312,58 @@ export default function ModalHistorico({ aluno, onFechar }) {
             )}
           </Card>
 
+          {/* Evolução da Frequência Cardíaca */}
+          <Card className="p-5">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <HeartPulse className="h-4 w-4 text-rose-500" />
+                <h3 className="font-bold text-zinc-900 dark:text-zinc-100">
+                  Evolução da Frequência Cardíaca
+                </h3>
+              </div>
+              <SeletorPeriodo valor={periodoBpm} onChange={setPeriodoBpm} />
+            </div>
+            {carregando ? (
+              <Spinner />
+            ) : bpmSerie ? (
+              <div>
+                <div className="mb-3 flex items-center justify-center gap-6 text-center">
+                  <div>
+                    <p className="text-lg font-extrabold text-zinc-900 dark:text-zinc-100">
+                      {bpmSerie.media} bpm
+                    </p>
+                    <p className="text-[10px] text-zinc-500 dark:text-zinc-400">
+                      Média no período
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-lg font-extrabold text-rose-500 dark:text-rose-400">
+                      {bpmSerie.ultimo} bpm
+                    </p>
+                    <p className="text-[10px] text-zinc-500 dark:text-zinc-400">
+                      Último treino
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-lg font-extrabold text-zinc-900 dark:text-zinc-100">
+                      {bpmSerie.pontos.length}
+                    </p>
+                    <p className="text-[10px] text-zinc-500 dark:text-zinc-400">
+                      Treinos c/ medição
+                    </p>
+                  </div>
+                </div>
+                <GraficoLinhaBpm pontos={bpmSerie.pontos} />
+              </div>
+            ) : (
+              <EstadoVazio
+                icone={HeartPulse}
+                titulo="Sem medições de FC"
+                descricao="Quando o aluno treinar com o frequencímetro conectado ao Portal do Aluno, a FC média de cada treino aparecerá aqui."
+              />
+            )}
+          </Card>
+
           {/* Histórico de treinos concluídos */}
           <Card className="p-5">
             <div className="mb-3 flex items-center gap-2">
@@ -323,6 +407,17 @@ export default function ModalHistorico({ aluno, onFechar }) {
                               </span>
                             ) : (
                               '—'
+                            )}
+                            {h.bpm_medio != null && (
+                              <span className="ml-2 inline-flex items-center gap-1">
+                                <HeartPulse className="h-3 w-3 text-rose-500" />
+                                {h.bpm_medio} bpm
+                                {h.bpm_max != null && (
+                                  <span className="text-zinc-400 dark:text-zinc-500">
+                                    ({h.bpm_min}–{h.bpm_max})
+                                  </span>
+                                )}
+                              </span>
                             )}
                           </p>
                         </div>

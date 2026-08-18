@@ -122,6 +122,95 @@ export function GraficoLinhaPse({ pontos }) {
   )
 }
 
+// Gráfico de linha (SVG) — evolução da FC média (BPM) com escala dinâmica.
+// pontos: [{ data, bpm }] (ordem cronológica)
+export function GraficoLinhaBpm({ pontos }) {
+  if (!pontos || pontos.length === 0) return null
+  const LARGURA = 320
+  const ALTURA = 130
+  const PAD = 10
+  const n = pontos.length
+  const valores = pontos.map((p) => Number(p.bpm) || 0)
+  const minimo = Math.min(...valores)
+  const maximo = Math.max(...valores)
+  // Base/teto com folga de 15 bpm para a linha não encostar nas bordas
+  const base = Math.max(0, minimo - 15)
+  const teto = maximo + 15
+  const escala = teto - base
+
+  const aux = (i, v) => {
+    const x = PAD + (i * (LARGURA - 2 * PAD)) / Math.max(1, n - 1)
+    const y = ALTURA - PAD - ((v - base) / escala) * (ALTURA - 2 * PAD)
+    return [x.toFixed(1), y.toFixed(1)]
+  }
+  const linha = valores
+    .map((v, i) => `${i === 0 ? 'M' : 'L'}${aux(i, v).join(',')}`)
+    .join(' ')
+  const x0 = aux(0, valores[0])[0]
+  const xUlt = aux(n - 1, valores[n - 1])[0]
+  const area = `${linha} L${xUlt},${ALTURA - PAD} L${x0},${ALTURA - PAD} Z`
+
+  const dataRotulo = (d) =>
+    new Date(d).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+
+  return (
+    <svg viewBox={`0 0 ${LARGURA} ${ALTURA}`} className="w-full">
+      {[0, 0.25, 0.5, 0.75, 1].map((k) => {
+        const y = ALTURA - PAD - k * (ALTURA - 2 * PAD)
+        return (
+          <line
+            key={k}
+            x1={PAD}
+            x2={LARGURA - PAD}
+            y1={y}
+            y2={y}
+            stroke="currentColor"
+            strokeOpacity="0.08"
+            strokeWidth="1"
+          />
+        )
+      })}
+      <path d={area} fill="#f43f5e" fillOpacity="0.15" stroke="none" />
+      <path
+        d={linha}
+        fill="none"
+        stroke="#f43f5e"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      {valores.map((v, i) => {
+        const [cx, cy] = aux(i, v)
+        return (
+          <circle
+            key={i}
+            cx={cx}
+            cy={cy}
+            r="3"
+            fill="currentColor"
+            className="text-zinc-50 dark:text-zinc-900"
+            stroke="#f43f5e"
+            strokeWidth="2"
+          />
+        )
+      })}
+      {[0, Math.floor((n - 1) / 2), n - 1].map((i) => (
+        <text
+          key={i}
+          x={aux(i, valores[i])[0]}
+          y={ALTURA - 3}
+          textAnchor="middle"
+          fontSize="8"
+          fill="currentColor"
+          fillOpacity="0.45"
+        >
+          {dataRotulo(pontos[i].data)}
+        </text>
+      ))}
+    </svg>
+  )
+}
+
 // Seletor de períodos Semanal / Mensal / Anual (pills)
 export function SeletorPeriodo({ valor, onChange }) {
   return (
