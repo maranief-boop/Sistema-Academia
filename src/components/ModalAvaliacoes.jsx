@@ -160,7 +160,9 @@ export default function ModalAvaliacoes({ aluno, onFechar }) {
       fecharFormulario()
       await carregar()
     } catch (e) {
-      toast(e.message || 'Erro ao salvar avaliação.', 'erro')
+      console.error('Erro ao salvar avaliação:', e)
+      const detalhe = e?.details ? ` ${e.details}` : ''
+      toast((e?.message || 'Erro ao salvar avaliação.') + detalhe, 'erro')
     } finally {
       setSalvando(false)
     }
