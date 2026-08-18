@@ -52,7 +52,11 @@ create table if not exists public.treinos (
   created_at      timestamptz not null default now()
 );
 
--- Para bancos já existentes: adiciona as colunas novas sem quebrar os dados
+-- Para bancos já existentes: adiciona/garante as colunas sem quebrar os dados
+alter table public.treinos add column if not exists id uuid default gen_random_uuid();
+alter table public.treinos add column if not exists aluno_id uuid;
+alter table public.treinos add column if not exists dia_semana text;
+alter table public.treinos add column if not exists exercicios_json jsonb not null default '[]'::jsonb;
 alter table public.treinos add column if not exists dias_semana text;
 alter table public.treinos add column if not exists restricoes text;
 alter table public.treinos add column if not exists descanso_padrao integer default 60;
@@ -203,8 +207,6 @@ create table if not exists public.avaliacoes (
   created_at    timestamptz not null default now()
 );
 
-create index if not exists avaliacoes_aluno_idx on public.avaliacoes (aluno_id, data desc);
-
 -- Para bancos já existentes (tabela criada sem as colunas): garante tudo
 alter table public.avaliacoes add column if not exists id uuid default gen_random_uuid();
 alter table public.avaliacoes add column if not exists aluno_id uuid;
@@ -212,6 +214,8 @@ alter table public.avaliacoes add column if not exists data date not null defaul
 alter table public.avaliacoes add column if not exists medidas_json jsonb not null default '{}'::jsonb;
 alter table public.avaliacoes add column if not exists observacoes text;
 alter table public.avaliacoes add column if not exists created_at timestamptz not null default now();
+
+create index if not exists avaliacoes_aluno_idx on public.avaliacoes (aluno_id, data desc);
 
 -- ---------------------------------------------------------------------
 -- Tabela: configuracoes (identidade visual White-Label — linha única id = 1)
