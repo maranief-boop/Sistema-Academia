@@ -3,13 +3,14 @@
 // =====================================================================
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Plus, Search, Pencil, Trash2, Dumbbell, Users, Phone, History } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, Dumbbell, Users, Phone, History, Stethoscope } from 'lucide-react'
 import { useAlunos } from '../hooks/useAlunos'
 import { useToast } from '../components/Toast'
 import { Modal } from '../components/Modal'
 import { StatusBadge } from '../components/StatusBadge'
 import FormAluno from '../components/FormAluno'
 import ModalHistorico from '../components/ModalHistorico'
+import ModalAvaliacoes from '../components/ModalAvaliacoes'
 import { Button, Input, Card, EstadoVazio, Spinner } from '../components/ui'
 import { formatarMoeda, formatarData, iniciais } from '../utils/format'
 
@@ -21,6 +22,7 @@ export default function Alunos() {
   const [modalAberto, setModalAberto] = useState(false)
   const [alunoEditando, setAlunoEditando] = useState(null)
   const [alunoHistorico, setAlunoHistorico] = useState(null)
+  const [alunoAvaliacao, setAlunoAvaliacao] = useState(null)
   const [salvando, setSalvando] = useState(false)
 
   const filtrados = useMemo(() => {
@@ -163,6 +165,13 @@ export default function Alunos() {
                   >
                     <History className="h-4 w-4" />
                   </button>
+                  <button
+                    onClick={() => setAlunoAvaliacao(aluno)}
+                    className="rounded-lg p-2 text-primary-600 transition hover:bg-primary-50 dark:text-primary-400 dark:hover:bg-primary-950"
+                    title="Avaliação física"
+                  >
+                    <Stethoscope className="h-4 w-4" />
+                  </button>
                   <Link
                     to={`/treinos?aluno=${aluno.id}`}
                     className="rounded-lg p-2 text-primary-600 transition hover:bg-primary-50 dark:text-primary-400 dark:hover:bg-primary-950"
@@ -208,6 +217,13 @@ export default function Alunos() {
         <ModalHistorico
           aluno={alunoHistorico}
           onFechar={() => setAlunoHistorico(null)}
+        />
+      )}
+
+      {alunoAvaliacao && (
+        <ModalAvaliacoes
+          aluno={alunoAvaliacao}
+          onFechar={() => setAlunoAvaliacao(null)}
         />
       )}
     </div>
