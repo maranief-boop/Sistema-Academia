@@ -218,6 +218,45 @@ alter table public.avaliacoes add column if not exists created_at timestamptz no
 create index if not exists avaliacoes_aluno_idx on public.avaliacoes (aluno_id, data desc);
 
 -- ---------------------------------------------------------------------
+-- CORREÇÃO: tabelas criadas pelo Table Editor podem ter FKs apontando
+-- para auth.users em vez de public.alunos. O app usa public.alunos, então
+-- removemos qualquer FK que aponte para "users" e recriamos corretamente.
+-- ---------------------------------------------------------------------
+do $$
+declare
+  r record;
+begin
+  for r in (
+    select con.conname as nome, rel.relname as tabela
+    from pg_constraint con
+    join pg_class rel on rel.oid = con.conrelid
+    join pg_class frel on frel.oid = con.confrelid
+    where rel.relnamespace = 'public'::regnamespace
+      and con.contype = 'f'
+      and frel.relname = 'users'
+      and rel.relname in ('avaliacoes', 'pagamentos')
+  ) loop
+    execute format('alter table public.%I drop constraint %I', r.tabela, r.nome);
+  end loop;
+end $$;
+
+-- Remove registros órfãos para não quebrar a recriação da FK
+delete from public.avaliacoes a
+where not exists (select 1 from public.alunos al where al.id = a.aluno_id);
+delete from public.pagamentos p
+where not exists (select 1 from public.alunos al where al.id = p.aluno_id);
+
+alter table public.avaliacoes drop constraint if exists avaliacoes_aluno_id_fkey;
+alter table public.avaliacoes
+  add constraint avaliacoes_aluno_id_fkey
+  foreign key (aluno_id) references public.alunos(id) on delete cascade;
+
+alter table public.pagamentos drop constraint if exists pagamentos_aluno_id_fkey;
+alter table public.pagamentos
+  add constraint pagamentos_aluno_id_fkey
+  foreign key (aluno_id) references public.alunos(id) on delete cascade;
+
+-- ---------------------------------------------------------------------
 -- Tabela: configuracoes (identidade visual White-Label — linha única id = 1)
 -- ---------------------------------------------------------------------
 create table if not exists public.configuracoes (
