@@ -180,6 +180,11 @@ create table if not exists public.avaliacoes (
 
 create index if not exists avaliacoes_aluno_idx on public.avaliacoes (aluno_id, data desc);
 
+-- Para bancos já existentes: garante as colunas sem quebrar os dados
+alter table public.avaliacoes add column if not exists data date not null default current_date;
+alter table public.avaliacoes add column if not exists medidas_json jsonb not null default '{}'::jsonb;
+alter table public.avaliacoes add column if not exists observacoes text;
+
 -- ---------------------------------------------------------------------
 -- Tabela: configuracoes (identidade visual White-Label — linha única id = 1)
 -- ---------------------------------------------------------------------

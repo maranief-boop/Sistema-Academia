@@ -90,6 +90,7 @@ export default function ModalAvaliacoes({ aluno, onFechar }) {
       .select('*')
       .eq('aluno_id', aluno.id)
       .order('data', { ascending: false })
+    if (error) toast(error.message || 'Erro ao carregar avaliações.', 'erro')
     if (!error) setAvaliacoes(data || [])
     setCarregando(false)
   }
@@ -230,9 +231,8 @@ export default function ModalAvaliacoes({ aluno, onFechar }) {
                         </Label>
                         <div className="relative">
                           <Input
-                            type="number"
+                            type="text"
                             inputMode="decimal"
-                            step={campo.passo}
                             placeholder="—"
                             value={valor}
                             disabled={campo.automatico}
