@@ -127,6 +127,12 @@ create table if not exists public.checkins (
   created_at timestamptz not null default now()
 );
 
+-- Para bancos já existentes (tabela criada sem as colunas): garante tudo
+alter table public.checkins add column if not exists id uuid default gen_random_uuid();
+alter table public.checkins add column if not exists aluno_id uuid;
+alter table public.checkins add column if not exists data_hora timestamptz;
+alter table public.checkins add column if not exists created_at timestamptz not null default now();
+
 create index if not exists checkins_data_idx on public.checkins (data_hora desc);
 create index if not exists checkins_aluno_idx on public.checkins (aluno_id, data_hora desc);
 
@@ -144,6 +150,15 @@ create table if not exists public.historico_treinos (
   observacoes    text,
   created_at     timestamptz not null default now()
 );
+
+-- Para bancos já existentes (tabela criada sem as colunas): garante tudo
+alter table public.historico_treinos add column if not exists id uuid default gen_random_uuid();
+alter table public.historico_treinos add column if not exists aluno_id uuid;
+alter table public.historico_treinos add column if not exists data timestamptz;
+alter table public.historico_treinos add column if not exists tempo_segundos integer;
+alter table public.historico_treinos add column if not exists pse integer;
+alter table public.historico_treinos add column if not exists observacoes text;
+alter table public.historico_treinos add column if not exists created_at timestamptz not null default now();
 
 create index if not exists historico_treinos_aluno_idx on public.historico_treinos (aluno_id, data desc);
 
@@ -163,6 +178,16 @@ create table if not exists public.pagamentos (
   constraint pagamentos_status_check check (status in ('aberto', 'pago', 'atrasado'))
 );
 
+-- Para bancos já existentes (tabela criada sem as colunas): garante tudo
+alter table public.pagamentos add column if not exists id uuid default gen_random_uuid();
+alter table public.pagamentos add column if not exists aluno_id uuid;
+alter table public.pagamentos add column if not exists competencia text not null default '';
+alter table public.pagamentos add column if not exists valor numeric(10,2) not null default 0;
+alter table public.pagamentos add column if not exists status text not null default 'aberto';
+alter table public.pagamentos add column if not exists forma text;
+alter table public.pagamentos add column if not exists data_pagamento timestamptz;
+alter table public.pagamentos add column if not exists created_at timestamptz not null default now();
+
 create index if not exists pagamentos_aluno_idx on public.pagamentos (aluno_id, competencia desc);
 
 -- ---------------------------------------------------------------------
@@ -180,10 +205,13 @@ create table if not exists public.avaliacoes (
 
 create index if not exists avaliacoes_aluno_idx on public.avaliacoes (aluno_id, data desc);
 
--- Para bancos já existentes: garante as colunas sem quebrar os dados
+-- Para bancos já existentes (tabela criada sem as colunas): garante tudo
+alter table public.avaliacoes add column if not exists id uuid default gen_random_uuid();
+alter table public.avaliacoes add column if not exists aluno_id uuid;
 alter table public.avaliacoes add column if not exists data date not null default current_date;
 alter table public.avaliacoes add column if not exists medidas_json jsonb not null default '{}'::jsonb;
 alter table public.avaliacoes add column if not exists observacoes text;
+alter table public.avaliacoes add column if not exists created_at timestamptz not null default now();
 
 -- ---------------------------------------------------------------------
 -- Tabela: configuracoes (identidade visual White-Label — linha única id = 1)
