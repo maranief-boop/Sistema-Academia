@@ -1470,7 +1470,7 @@ export default function PortalAluno() {
                             key={i}
                             className={`overflow-hidden rounded-2xl backdrop-blur-sm transition-colors ${
                               feito
-                                ? 'bg-emerald-500/20 ring-1 ring-inset ring-emerald-400/40'
+                                ? 'bg-emerald-500/20 ring-2 ring-inset ring-emerald-400/70 shadow-lg shadow-emerald-500/20'
                                 : 'bg-white/10'
                             }`}
                           >
